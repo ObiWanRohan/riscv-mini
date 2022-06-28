@@ -250,8 +250,15 @@ class CSR(val xlen: Int) extends Module {
     false.B,
     Seq(Control.LD_LW -> io.addr(1, 0).orR, Control.LD_LH -> io.addr(0), Control.LD_LHU -> io.addr(0))
   )
-  val saddrInvalid =
-    MuxLookup(io.st_type, false.B, Seq(Control.ST_SW -> io.addr(1, 0).orR, Control.ST_SH -> io.addr(0)))
+  val saddrInvalid = MuxLookup(
+    io.st_type,
+    false.B,
+    Seq(
+      Control.ST_SW -> io.addr(1, 0).orR,
+      Control.ST_SH -> io.addr(0)
+    )
+  )
+
   io.expt := io.illegal || iaddrInvalid || laddrInvalid || saddrInvalid ||
     io.cmd(1, 0).orR && (!csrValid || !privValid) || wen && csrRO ||
     (privInst && !privValid) || isEcall || isEbreak
@@ -270,17 +277,14 @@ class CSR(val xlen: Int) extends Module {
   when(!io.stall) {
     when(io.expt) {
       mepc := io.pc >> 2 << 2
-      mcause := Mux(
-        iaddrInvalid,
-        Cause.InstAddrMisaligned,
-        Mux(
-          laddrInvalid,
-          Cause.LoadAddrMisaligned,
-          Mux(
-            saddrInvalid,
-            Cause.StoreAddrMisaligned,
-            Mux(isEcall, Cause.Ecall + PRV, Mux(isEbreak, Cause.Breakpoint, Cause.IllegalInst))
-          )
+      mcause := MuxCase(
+        Cause.IllegalInst,
+        IndexedSeq(
+          iaddrInvalid -> Cause.InstAddrMisaligned,
+          laddrInvalid -> Cause.LoadAddrMisaligned,
+          saddrInvalid -> Cause.StoreAddrMisaligned,
+          isEcall -> (Cause.Ecall + PRV),
+          isEbreak -> Cause.Breakpoint
         )
       )
       PRV := CSR.PRV_M
