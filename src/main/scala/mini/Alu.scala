@@ -4,32 +4,33 @@ package mini
 
 import chisel3._
 import chisel3.util._
+import chisel3.experimental.ChiselEnum
 
-object Alu {
-  val ALU_ADD = 0.U(4.W)
-  val ALU_SUB = 1.U(4.W)
-  val ALU_AND = 2.U(4.W)
-  val ALU_OR = 3.U(4.W)
-  val ALU_XOR = 4.U(4.W)
-  val ALU_SLT = 5.U(4.W)
-  val ALU_SLL = 6.U(4.W)
-  val ALU_SLTU = 7.U(4.W)
-  val ALU_SRL = 8.U(4.W)
-  val ALU_SRA = 9.U(4.W)
-  val ALU_COPY_A = 10.U(4.W)
-  val ALU_COPY_B = 11.U(4.W)
-  val ALU_XXX = 15.U(4.W)
+object AluSel extends ChiselEnum {
+  val ALU_ADD = Value(0.U)
+  val ALU_SUB = Value(1.U)
+  val ALU_AND = Value(2.U)
+  val ALU_OR = Value(3.U)
+  val ALU_XOR = Value(4.U)
+  val ALU_SLT = Value(5.U)
+  val ALU_SLL = Value(6.U)
+  val ALU_SLTU = Value(7.U)
+  val ALU_SRL = Value(8.U)
+  val ALU_SRA = Value(9.U)
+  val ALU_COPY_A = Value(10.U)
+  val ALU_COPY_B = Value(11.U)
+  val ALU_XXX = Value(15.U)
 }
 
 class AluIO(width: Int) extends Bundle {
   val A = Input(UInt(width.W))
   val B = Input(UInt(width.W))
-  val alu_op = Input(UInt(4.W))
+  val alu_op = Input(AluSel())
   val out = Output(UInt(width.W))
   val sum = Output(UInt(width.W))
 }
 
-import mini.Alu._
+import mini.AluSel._
 
 trait Alu extends Module {
   def width: Int
@@ -42,34 +43,34 @@ class AluSimple(val width: Int) extends Alu {
   val shamt = io.B(4, 0).asUInt
 
   io.out := MuxLookup(
-    io.alu_op,
+    io.alu_op.asUInt,
     io.B,
     Seq(
-      ALU_ADD -> (io.A + io.B),
-      ALU_SUB -> (io.A - io.B),
-      ALU_SRA -> (io.A.asSInt >> shamt).asUInt,
-      ALU_SRL -> (io.A >> shamt),
-      ALU_SLL -> (io.A << shamt),
-      ALU_SLT -> (io.A.asSInt < io.B.asSInt),
-      ALU_SLTU -> (io.A < io.B),
-      ALU_AND -> (io.A & io.B),
-      ALU_OR -> (io.A | io.B),
-      ALU_XOR -> (io.A ^ io.B),
-      ALU_COPY_A -> io.A
+      ALU_ADD.asUInt -> (io.A + io.B),
+      ALU_SUB.asUInt -> (io.A - io.B),
+      ALU_SRA.asUInt -> (io.A.asSInt >> shamt).asUInt,
+      ALU_SRL.asUInt -> (io.A >> shamt),
+      ALU_SLL.asUInt -> (io.A << shamt),
+      ALU_SLT.asUInt -> (io.A.asSInt < io.B.asSInt),
+      ALU_SLTU.asUInt -> (io.A < io.B),
+      ALU_AND.asUInt -> (io.A & io.B),
+      ALU_OR.asUInt -> (io.A | io.B),
+      ALU_XOR.asUInt -> (io.A ^ io.B),
+      ALU_COPY_A.asUInt -> io.A
     )
   )
 
-  io.sum := io.A + Mux(io.alu_op(0), -io.B, io.B)
+  io.sum := io.A + Mux(io.alu_op.asUInt(0), -io.B, io.B)
 }
 
 class AluArea(val width: Int) extends Alu {
   val io = IO(new AluIO(width))
-  val sum = io.A + Mux(io.alu_op(0), -io.B, io.B)
+  val sum = io.A + Mux(io.alu_op.asUInt(0), -io.B, io.B)
   val cmp =
-    Mux(io.A(width - 1) === io.B(width - 1), sum(width - 1), Mux(io.alu_op(1), io.B(width - 1), io.A(width - 1)))
+    Mux(io.A(width - 1) === io.B(width - 1), sum(width - 1), Mux(io.alu_op.asUInt(1), io.B(width - 1), io.A(width - 1)))
   val shamt = io.B(4, 0).asUInt
-  val shin = Mux(io.alu_op(3), io.A, Reverse(io.A))
-  val shiftr = (Cat(io.alu_op(0) && shin(width - 1), shin).asSInt >> shamt)(width - 1, 0)
+  val shin = Mux(io.alu_op.asUInt(3), io.A, Reverse(io.A))
+  val shiftr = (Cat(io.alu_op.asUInt(0) && shin(width - 1), shin).asSInt >> shamt)(width - 1, 0)
   val shiftl = Reverse(shiftr)
 
   val out =

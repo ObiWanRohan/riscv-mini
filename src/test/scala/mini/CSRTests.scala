@@ -9,7 +9,11 @@ import chiseltest._
 import org.scalatest.flatspec.AnyFlatSpec
 
 class CSRTester(c: => CSR, trace: Boolean = false) extends BasicTester with TestUtils {
-  import Control._
+
+  import CPUControlSignalTypes.LdType._
+  import CPUControlSignalTypes.StType._
+  import CPUControlSignalTypes.PCSel._
+
   val dut = Module(c)
   val ctrl = Module(new Control)
   val xlen = dut.xlen
@@ -267,8 +271,8 @@ class CSRTester(c: => CSR, trace: Boolean = false) extends BasicTester with Test
     printf(
       "     cmd: 0x%x, st_type: 0x%x, ld_type: 0x%x, illegal: %d, pc_check: %d\n",
       dut.io.cmd,
-      dut.io.st_type,
-      dut.io.ld_type,
+      dut.io.st_type.asUInt,
+      dut.io.ld_type.asUInt,
       dut.io.illegal,
       dut.io.pc_check
     )

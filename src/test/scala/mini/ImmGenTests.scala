@@ -10,7 +10,9 @@ import chiseltest.formal._
 import org.scalatest.flatspec.AnyFlatSpec
 
 class ImmGenTester(imm: => ImmGen) extends BasicTester with TestUtils {
-  import Control._
+
+  import CPUControlSignalTypes.ImmSel._
+
   val dut = Module(imm)
   val ctrl = Module(new Control)
 
@@ -46,7 +48,7 @@ class ImmGenTester(imm: => ImmGen) extends BasicTester with TestUtils {
 
   when(done) { stop() }
   assert(dut.io.out === out)
-  printf("Counter: %d, Type: 0x%x, Out: %x ?= %x\n", cntr, dut.io.sel, dut.io.out, out)
+  printf("Counter: %d, Type: 0x%x, Out: %x ?= %x\n", cntr, dut.io.sel.asUInt, dut.io.out, out)
 }
 
 class ImmGenTests extends AnyFlatSpec with ChiselScalatestTester with Formal {

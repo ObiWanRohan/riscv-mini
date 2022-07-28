@@ -5,10 +5,11 @@ package mini
 import chisel3._
 import chisel3.util._
 import mini.Control._
+import CPUControlSignalTypes._
 
 class ImmGenIO(xlen: Int) extends Bundle {
   val inst = Input(UInt(xlen.W))
-  val sel = Input(UInt(3.W))
+  val sel = Input(ImmSel())
   val out = Output(UInt(xlen.W))
 }
 
@@ -26,14 +27,26 @@ class ImmGenWire(val xlen: Int) extends ImmGen {
   val Jimm = Cat(io.inst(31), io.inst(19, 12), io.inst(20), io.inst(30, 25), io.inst(24, 21), 0.U(1.W)).asSInt
   val Zimm = io.inst(19, 15).zext
 
+  import CPUControlSignalTypes.ImmSel._
+
   io.out := MuxLookup(
-    io.sel,
+    io.sel.asUInt,
     Iimm & (-2).S,
-    Seq(IMM_I -> Iimm, IMM_S -> Simm, IMM_B -> Bimm, IMM_U -> Uimm, IMM_J -> Jimm, IMM_Z -> Zimm)
+    Seq(
+      IMM_I.asUInt -> Iimm,
+      IMM_S.asUInt -> Simm,
+      IMM_B.asUInt -> Bimm,
+      IMM_U.asUInt -> Uimm,
+      IMM_J.asUInt -> Jimm,
+      IMM_Z.asUInt -> Zimm
+    )
   ).asUInt
 }
 
 class ImmGenMux(val xlen: Int) extends ImmGen {
+
+  import CPUControlSignalTypes.ImmSel._
+
   val io = IO(new ImmGenIO(xlen))
   val sign = Mux(io.sel === IMM_Z, 0.S, io.inst(31).asSInt)
   val b30_20 = Mux(io.sel === IMM_U, io.inst(30, 20).asSInt, sign)

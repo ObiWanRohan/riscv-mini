@@ -5,6 +5,7 @@ package mini
 import chisel3._
 import chisel3.experimental.ChiselEnum
 import chisel3.testers._
+// import chiseltest.simulator.{WriteWaveformAnnotation}
 import chisel3.util._
 import chiseltest._
 import org.scalatest.flatspec.AnyFlatSpec
@@ -47,7 +48,13 @@ class DatapathTester(datapath: => Datapath, testType: DatapathTest) extends Basi
         mem((addr / 4).U) := (if (addr == Const.PC_EVEC + (3 << 6)) fin else nop)
       }
       mem((Const.PC_START / (xlen / 8)).U + cntr) := VecInit(insts)(cntr)
-      when(done) { state := sRun }
+      when(done) {
+        printf(s"Instructions for ${testType}:\n")
+        insts.foreach { inst =>
+          printf("%x\n", inst)
+        }
+        state := sRun
+      }
     }
     is(sRun) {
       when(dut.io.icache.req.valid) {
@@ -57,6 +64,7 @@ class DatapathTester(datapath: => Datapath, testType: DatapathTest) extends Basi
         when(dut.io.dcache.req.bits.mask.orR) {
           mem(daddr) := write
           printf("MEM[%x] <= %x\n", dut.io.dcache.req.bits.addr, write)
+          // printf("Stall : %d\n", dut.stall)
         }.otherwise {
           printf("MEM[%x] => %x\n", dut.io.dcache.req.bits.addr, mem(daddr))
         }
@@ -77,9 +85,21 @@ class DatapathTester(datapath: => Datapath, testType: DatapathTest) extends Basi
 
 class DatapathTests extends AnyFlatSpec with ChiselScalatestTester {
   val p = MiniConfig()
+  val runWithVerilator = true
+
   Seq(BypassTest, ExceptionTest).foreach { tst =>
-    "Datapath" should s"pass $tst" in {
-      test(new DatapathTester(new Datapath(p.core), tst)).runUntilStop()
+    if (!runWithVerilator) {
+      "Datapath" should s"pass $tst" in {
+        // printf("Instructions for %s: \n %x", tst, insts.map(inst => Hexadecimal(inst)))
+        test(new DatapathTester(new Datapath(p.core), tst)).runUntilStop()
+      }
+    } else {
+      "Datapath" should s"pass $tst with verilator" in {
+        test(new DatapathTester(new Datapath(p.core), tst))
+          .withAnnotations(Seq(VerilatorBackendAnnotation, WriteVcdAnnotation))
+          .runUntilStop()
+      }
     }
+
   }
 }

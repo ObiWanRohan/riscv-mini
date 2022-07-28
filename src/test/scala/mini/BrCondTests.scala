@@ -10,7 +10,9 @@ import chiseltest.formal._
 import org.scalatest.flatspec.AnyFlatSpec
 
 class BrCondTester(br: => BrCond) extends BasicTester with TestUtils {
-  import Control._
+
+  import CPUControlSignalTypes.BrType._
+
   val dut = Module(br)
   val ctrl = Module(new Control)
 
@@ -64,7 +66,7 @@ class BrCondTester(br: => BrCond) extends BasicTester with TestUtils {
   printf(
     "Counter: %d, BrType: 0x%x, rs1: 0x%x, rs2: 0x%x, Taken: %d ?= %d\n",
     cntr,
-    dut.io.br_type,
+    dut.io.br_type.asUInt,
     dut.io.rs1,
     dut.io.rs2,
     dut.io.taken,

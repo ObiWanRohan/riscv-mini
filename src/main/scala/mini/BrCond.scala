@@ -3,12 +3,12 @@
 package mini
 
 import chisel3._
-import mini.Control._
+import CPUControlSignalTypes._
 
 class BrCondIO(xlen: Int) extends Bundle {
   val rs1 = Input(UInt(xlen.W))
   val rs2 = Input(UInt(xlen.W))
-  val br_type = Input(UInt(3.W))
+  val br_type = Input(BrType())
   val taken = Output(Bool())
 }
 
@@ -18,6 +18,9 @@ trait BrCond extends Module {
 }
 
 class BrCondSimple(val xlen: Int) extends BrCond {
+
+  import CPUControlSignalTypes.BrType._
+
   val io = IO(new BrCondIO(xlen))
   val eq = io.rs1 === io.rs2
   val neq = !eq
@@ -35,6 +38,9 @@ class BrCondSimple(val xlen: Int) extends BrCond {
 }
 
 class BrCondArea(val xlen: Int) extends BrCond {
+
+  import CPUControlSignalTypes.BrType._
+
   val io = IO(new BrCondIO(xlen))
   val diff = io.rs1 - io.rs2
   val neq = diff.orR

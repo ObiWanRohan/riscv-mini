@@ -10,7 +10,7 @@ import chiseltest.formal._
 import org.scalatest.flatspec.AnyFlatSpec
 
 class AluTester(alu: => Alu) extends BasicTester with TestUtils {
-  import Alu._
+  import AluSel._
   val dut = Module(alu)
   val ctrl = Module(new Control)
   val xlen = dut.width
@@ -66,7 +66,7 @@ class AluTester(alu: => Alu) extends BasicTester with TestUtils {
         )
       )
     ),
-    Mux(dut.io.alu_op(0), diff(cntr), sum(cntr))
+    Mux(dut.io.alu_op.asUInt(0), diff(cntr), sum(cntr))
   )
 
   ctrl.io.inst := VecInit(insts)(cntr)
@@ -80,7 +80,7 @@ class AluTester(alu: => Alu) extends BasicTester with TestUtils {
   printf(
     "Counter: %d, OP: 0x%x, A: 0x%x, B: 0x%x, OUT: 0x%x ?= 0x%x, SUM: 0x%x ?= 0x%x\n",
     cntr,
-    dut.io.alu_op,
+    dut.io.alu_op.asUInt,
     dut.io.A,
     dut.io.B,
     dut.io.out,

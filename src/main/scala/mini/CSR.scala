@@ -5,6 +5,8 @@ package mini
 import chisel3._
 import chisel3.util._
 
+import CPUControlSignalTypes._
+
 object CSR {
   val N = 0.U(3.W)
   val W = 1.U(3.W)
@@ -108,8 +110,8 @@ class CSRIO(xlen: Int) extends Bundle {
   val addr = Input(UInt(xlen.W))
   val inst = Input(UInt(xlen.W))
   val illegal = Input(Bool())
-  val st_type = Input(UInt(2.W))
-  val ld_type = Input(UInt(3.W))
+  val st_type = Input(StType())
+  val ld_type = Input(LdType())
   val pc_check = Input(Bool())
   val expt = Output(Bool())
   val evec = Output(UInt(xlen.W))
@@ -246,16 +248,16 @@ class CSR(val xlen: Int) extends Module {
   )
   val iaddrInvalid = io.pc_check && io.addr(1)
   val laddrInvalid = MuxLookup(
-    io.ld_type,
+    io.ld_type.asUInt,
     false.B,
-    Seq(Control.LD_LW -> io.addr(1, 0).orR, Control.LD_LH -> io.addr(0), Control.LD_LHU -> io.addr(0))
+    Seq(LdType.LD_LW.asUInt -> io.addr(1, 0).orR, LdType.LD_LH.asUInt -> io.addr(0), LdType.LD_LHU.asUInt -> io.addr(0))
   )
   val saddrInvalid = MuxLookup(
-    io.st_type,
+    io.st_type.asUInt,
     false.B,
     Seq(
-      Control.ST_SW -> io.addr(1, 0).orR,
-      Control.ST_SH -> io.addr(0)
+      StType.ST_SW.asUInt -> io.addr(1, 0).orR,
+      StType.ST_SH.asUInt -> io.addr(0)
     )
   )
 
