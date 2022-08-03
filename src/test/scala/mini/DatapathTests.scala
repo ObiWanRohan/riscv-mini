@@ -24,6 +24,7 @@ class DatapathTester(datapath: => Datapath, testType: DatapathTest) extends Basi
   dut.io.host.fromhost.valid := false.B
 
   override val insts = tests(testType)
+  val maxTimeout = 100.U
 
   import DatapathTesterState._
   val state = RegInit(sInit)
@@ -70,7 +71,7 @@ class DatapathTester(datapath: => Datapath, testType: DatapathTest) extends Basi
         }
       }
       timeout := timeout + 1.U
-      assert(timeout < 100.U)
+      assert(timeout < maxTimeout)
       when(dut.io.host.tohost =/= 0.U) {
         assert(
           dut.io.host.tohost === testResults(testType).U,
