@@ -6,6 +6,8 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.BundleLiterals._
 
+import mini.common._
+
 object Const {
   val PC_START = 0x200
   val PC_EVEC = 0x100
@@ -15,19 +17,40 @@ class DatapathIO(xlen: Int) extends Bundle {
   val host = new HostIO(xlen)
   val icache = Flipped(new CacheIO(xlen, xlen))
   val dcache = Flipped(new CacheIO(xlen, xlen))
-  val ctrl = Flipped(new ControlSignals)
+  val ctrl = Flipped(new ControlSignalsIO)
 }
 
-class FetchExecutePipelineRegister(xlen: Int) extends Bundle {
+class FetchDecodePipelineRegister(xlen: Int) extends Bundle {
   val inst = chiselTypeOf(Instructions.NOP)
   val pc = UInt(xlen.W)
+  val ctrl = new ControlSignals
+}
+
+class DecodeExecutePipelineRegister(xlen: Int) extends Bundle {
+  val pc = UInt(xlen.W)
+  val inst = chiselTypeOf(Instructions.NOP)
+  val op1 = UInt(xlen.W)
+  val op2 = UInt(xlen.W)
+  val rs1 = UInt(xlen.W)
+  val rs2 = UInt(xlen.W)
+
+  val immOut = UInt(xlen.W)
+
+  val ctrl = new ControlSignals
+
+  // This holds the address for the writeback
+  // Disabled for now since the address can be taken from the instruction
+  // val wb = Reg(UInt())
 }
 
 class ExecuteWritebackPipelineRegister(xlen: Int) extends Bundle {
   val inst = chiselTypeOf(Instructions.NOP)
   val pc = UInt(xlen.W)
   val alu = UInt(xlen.W)
+  val rs2 = UInt(xlen.W)
   val csr_in = UInt(xlen.W)
+
+  val ctrl = new ControlSignals
 }
 
 class Datapath(val conf: CoreConfig) extends Module {
@@ -37,18 +60,32 @@ class Datapath(val conf: CoreConfig) extends Module {
   val alu = Module(conf.makeAlu(conf.xlen))
   val immGen = Module(conf.makeImmGen(conf.xlen))
   val brCond = Module(conf.makeBrCond(conf.xlen))
+  val forwardingUnit = Module(conf.makeForwardingUnit(conf.xlen))
 
   import Control._
   import CPUControlSignalTypes._
+  import ForwardDecOperand._
 
   /** Pipeline State Registers * */
 
   /** *** Fetch / Execute Registers ****
     */
-  val fe_reg = RegInit(
-    (new FetchExecutePipelineRegister(conf.xlen)).Lit(
+  val fd_reg = RegInit(
+    (new FetchDecodePipelineRegister(conf.xlen)).Lit(
       _.inst -> Instructions.NOP,
       _.pc -> 0.U
+    )
+  )
+
+  /** *** Decode / Execute Registers ****
+    */
+  val de_reg = RegInit(
+    (new DecodeExecutePipelineRegister(conf.xlen)).Lit(
+      _.inst -> Instructions.NOP,
+      _.pc -> 0.U,
+      _.op1 -> 0.U,
+      _.op2 -> 0.U,
+      _.rs2 -> 0.U
     )
   )
 
@@ -65,32 +102,38 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   /** **** Control signals ****
     */
-  val st_type = Reg(io.ctrl.st_type.cloneType)
-  val ld_type = Reg(io.ctrl.ld_type.cloneType)
-  val wb_sel = Reg(io.ctrl.wb_sel.cloneType)
-  val wb_en = Reg(Bool())
-  val csr_cmd = Reg(io.ctrl.csr_cmd.cloneType)
-  val illegal = Reg(Bool())
+  // TODO: Remove the ones which aren't used globally
+  // val st_type = Reg(io.ctrl.st_type.cloneType)
+  // val ld_type = Reg(io.ctrl.ld_type.cloneType)
+  // val wb_sel = Reg(io.ctrl.wb_sel.cloneType)
+  // val wb_en = Reg(Bool())
+  // val csr_cmd = Reg(io.ctrl.csr_cmd.cloneType)
+  // val illegal = Reg(Bool())
   val pc_check = Reg(Bool())
 
-  /** **** Fetch ****
+  /**
+    * *** Fetch Stage ***
     */
   val started = RegNext(reset.asBool)
   val stall = !io.icache.resp.valid || !io.dcache.resp.valid
+
   val pc = RegInit(Const.PC_START.U(conf.xlen.W) - 4.U(conf.xlen.W))
   // Next Program Counter
   val next_pc = MuxCase(
     pc + 4.U,
     IndexedSeq(
       stall -> pc,
-      csr.io.expt -> csr.io.evec,
-      (io.ctrl.pc_sel === PCSel.PC_EPC) -> csr.io.epc,
-      ((io.ctrl.pc_sel === PCSel.PC_ALU) || (brCond.io.taken)) -> (alu.io.sum >> 1.U << 1.U),
-      (io.ctrl.pc_sel === PCSel.PC_0) -> pc
+      csr.io.exception -> csr.io.evec,
+      (de_reg.ctrl.pc_sel === PCSel.PC_EPC) -> csr.io.epc,
+      ((de_reg.ctrl.pc_sel === PCSel.PC_ALU) || (brCond.io.taken)) -> (alu.io.sum >> 1.U << 1.U),
+      (de_reg.ctrl.pc_sel === PCSel.PC_0) -> pc
     )
   )
+
+  val fetch_kill = io.ctrl.inst_kill || brCond.io.taken
   val inst =
-    Mux(started || io.ctrl.inst_kill || brCond.io.taken || csr.io.expt, Instructions.NOP, io.icache.resp.bits.data)
+    Mux(started || fetch_kill || csr.io.exception, Instructions.NOP, io.icache.resp.bits.data)
+
   pc := next_pc
   io.icache.req.bits.addr := next_pc
   io.icache.req.bits.data := 0.U
@@ -100,85 +143,165 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   // Pipelining
   when(!stall) {
-    fe_reg.pc := pc
-    fe_reg.inst := inst
+    fd_reg.pc := pc
+    fd_reg.inst := inst
   }
 
-  /** **** Execute ****
+  forwardingUnit.io.fd_reg := fd_reg
+
+  /**
+    * *** Decode Stage ***
     */
-  io.ctrl.inst := fe_reg.inst
+
+  // Connect to control signal IO
+  // The instruction from the instruction memory
+  io.ctrl.inst := fd_reg.inst
 
   // regFile read
-  val rd_addr = fe_reg.inst(11, 7)
-  val rs1_addr = fe_reg.inst(19, 15)
-  val rs2_addr = fe_reg.inst(24, 20)
-  regFile.io.raddr1 := rs1_addr
-  regFile.io.raddr2 := rs2_addr
+  // Register number fields from instruction
+  val dec_rd_addr = fd_reg.inst(11, 7) // Destination Register Address
+  val dec_rs1_addr = fd_reg.inst(19, 15) // Source Register 1 Address
+  val dec_rs2_addr = fd_reg.inst(24, 20) // Source Register 2 Address
 
-  // gen immdeates
-  immGen.io.inst := fe_reg.inst
+  // Connecting register address for read
+  regFile.io.raddr1 := dec_rs1_addr
+  regFile.io.raddr2 := dec_rs2_addr
+
+  // generate immediates
+  immGen.io.inst := fd_reg.inst
   immGen.io.sel := io.ctrl.imm_sel
 
-  // bypass
-  val wb_rd_addr = ew_reg.inst(11, 7)
-  val rs1hazard = wb_en && rs1_addr.orR && (rs1_addr === wb_rd_addr)
-  val rs2hazard = wb_en && rs2_addr.orR && (rs2_addr === wb_rd_addr)
-  val rs1 = Mux(wb_sel === WbSel.WB_ALU && rs1hazard, ew_reg.alu, regFile.io.rdata1)
-  val rs2 = Mux(wb_sel === WbSel.WB_ALU && rs2hazard, ew_reg.alu, regFile.io.rdata2)
+  // Register read data values including bypass
+  val rs1 = Wire(UInt(conf.xlen.W))
+  val rs2 = Wire(UInt(conf.xlen.W))
 
-  // ALU operations
-  alu.io.A := Mux(io.ctrl.A_sel === ASel.A_RS1, rs1, fe_reg.pc)
-  alu.io.B := Mux(io.ctrl.B_sel === BSel.B_RS2, rs2, immGen.io.out)
-  alu.io.alu_op := io.ctrl.alu_op
-
-  // Branch condition calc
-  brCond.io.rs1 := rs1
-  brCond.io.rs2 := rs2
-  brCond.io.br_type := io.ctrl.br_type
-
-  // D$ access
-  val daddr = Mux(stall, ew_reg.alu, alu.io.sum) >> 2.U << 2.U
-  val woffset = (alu.io.sum(1) << 4.U).asUInt | (alu.io.sum(0) << 3.U).asUInt
-  io.dcache.req.valid := !stall && (io.ctrl.st_type.asUInt.orR || io.ctrl.ld_type.asUInt.orR)
-  io.dcache.req.bits.addr := daddr
-  io.dcache.req.bits.data := rs2 << woffset
-  io.dcache.req.bits.mask := MuxLookup(
-    Mux(stall, st_type, io.ctrl.st_type).asUInt,
-    "b0000".U,
-    Seq(
-      StType.ST_SW.asUInt -> "b1111".U,
-      StType.ST_SH.asUInt -> ("b11".U << alu.io.sum(1, 0)),
-      StType.ST_SB.asUInt -> ("b1".U << alu.io.sum(1, 0))
+  rs1 := MuxCase(
+    regFile.io.rdata1,
+    IndexedSeq(
+      // Forward from EX/WB stage register
+      (forwardingUnit.io.forward_dec_opA === ForwardDecOperand.FWD_EW) -> ew_reg.alu,
+      // No forwarding
+      (forwardingUnit.io.forward_dec_opA === ForwardDecOperand.FWD_NONE) -> regFile.io.rdata1
+    )
+  )
+  rs2 := MuxCase(
+    regFile.io.rdata2,
+    IndexedSeq(
+      // Forward from EX/WB stage register
+      (forwardingUnit.io.forward_dec_opB === ForwardDecOperand.FWD_EW) -> ew_reg.alu,
+      // No forwarding
+      (forwardingUnit.io.forward_dec_opB === ForwardDecOperand.FWD_NONE) -> regFile.io.rdata2
     )
   )
 
-  // Pipelining
-  when(reset.asBool || !stall && csr.io.expt) {
-    st_type := StType.ST_XXX
-    ld_type := LdType.LD_XXX
-    wb_en := false.B
-    csr_cmd := 0.U
-    illegal := false.B
-    pc_check := false.B
-  }.elsewhen(!stall && !csr.io.expt) {
-    ew_reg.pc := fe_reg.pc
-    ew_reg.inst := fe_reg.inst
-    ew_reg.alu := alu.io.out
-    ew_reg.csr_in := Mux(io.ctrl.imm_sel === ImmSel.IMM_Z, immGen.io.out, rs1)
-    st_type := io.ctrl.st_type
-    ld_type := io.ctrl.ld_type
-    wb_sel := io.ctrl.wb_sel
-    wb_en := io.ctrl.wb_en
-    csr_cmd := io.ctrl.csr_cmd
-    illegal := io.ctrl.illegal
-    pc_check := io.ctrl.pc_sel === PCSel.PC_ALU
+  // Connect Pipelining Registers
+  // Get new instruction only when a branch/jump is not happening
+  when(!brCond.io.taken && de_reg.ctrl.pc_sel =/= PCSel.PC_ALU) {
+    de_reg.pc := fd_reg.pc
+    de_reg.inst := fd_reg.inst
+    de_reg.ctrl := io.ctrl
+    de_reg.rs1 := rs1
+    de_reg.rs2 := rs2
+    de_reg.immOut := immGen.io.out
+
+    // Mux to bypass register from writeback stage
+    de_reg.op1 := MuxCase(
+      rs1,
+      IndexedSeq(
+        (io.ctrl.A_sel === ASel.A_RS1) -> rs1,
+        (io.ctrl.A_sel === ASel.A_PC) -> fd_reg.pc
+      )
+    )
+
+    de_reg.op2 := MuxCase(
+      rs2,
+      IndexedSeq(
+        (io.ctrl.B_sel === BSel.B_RS2) -> rs2,
+        (io.ctrl.B_sel === BSel.B_IMM) -> immGen.io.out
+      )
+    )
+
+  }.otherwise {
+    de_reg.pc := fd_reg.pc
+    de_reg.inst := Instructions.NOP
+    de_reg.ctrl := io.ctrl
+
+    // Keeping these the same
+    de_reg.rs2 := 0.U
+    de_reg.immOut := 0.U
+    de_reg.op1 := 0.U
+    de_reg.op2 := 0.U
+
   }
+
+  val de_rs1_addr = de_reg.inst(19, 15)
+  val de_rs2_addr = de_reg.inst(24, 20)
+
+  forwardingUnit.io.de_reg := de_reg
+
+  /**
+    * *** Execute Stage ***
+    */
+
+  val wb_rd_addr = ew_reg.inst(11, 7)
+
+  val ex_alu_op1 = Wire(UInt(conf.xlen.W))
+  val ex_alu_op2 = Wire(UInt(conf.xlen.W))
+
+  ex_alu_op1 := MuxCase(
+    de_reg.op1,
+    IndexedSeq(
+      (forwardingUnit.io.forward_exe_opA === ForwardExeOperand.FWD_EW) -> ew_reg.alu,
+      (forwardingUnit.io.forward_exe_opA === ForwardExeOperand.FWD_NONE) -> de_reg.op1
+    )
+  )
+  ex_alu_op2 := MuxCase(
+    de_reg.op2,
+    IndexedSeq(
+      (forwardingUnit.io.forward_exe_opB === ForwardExeOperand.FWD_EW) -> ew_reg.alu,
+      (forwardingUnit.io.forward_exe_opB === ForwardExeOperand.FWD_NONE) -> de_reg.op2
+    )
+  )
+
+  // ALU operations
+  alu.io.A := ex_alu_op1
+  alu.io.B := ex_alu_op2
+
+  alu.io.alu_op := de_reg.ctrl.alu_op
+
+  // Branch condition calc
+  brCond.io.rs1 := de_reg.rs1
+  brCond.io.rs2 := de_reg.rs2
+  brCond.io.br_type := de_reg.ctrl.br_type
+
+  // Pipelining
+
+  when(reset.asBool || !stall && csr.io.exception) {
+    pc_check := false.B
+  }.elsewhen(!stall && !csr.io.exception) {
+    ew_reg.pc := de_reg.pc
+    ew_reg.inst := de_reg.inst
+    ew_reg.ctrl := de_reg.ctrl
+    ew_reg.rs2 := de_reg.rs2
+    ew_reg.alu := alu.io.out
+
+    // ew_reg.csr_in := Mux(de_reg.ctrl.imm_sel === ImmSel.IMM_Z, de_reg.immOut, de_reg.op1)
+    ew_reg.csr_in := alu.io.out
+
+    // Might need to convert this to a wire and make it a MuxLookup
+    pc_check := de_reg.ctrl.pc_sel === PCSel.PC_ALU
+  }
+  forwardingUnit.io.ew_reg := ew_reg
+
+  forwardingUnit.io.wb_rd := wb_rd_addr
+  forwardingUnit.io.wb_en := ew_reg.ctrl.wb_en
+  forwardingUnit.io.wb_sel := ew_reg.ctrl.wb_sel
 
   // Load
   val loffset = (ew_reg.alu(1) << 4.U).asUInt | (ew_reg.alu(0) << 3.U).asUInt
   val lshift = io.dcache.resp.bits.data >> loffset
   val load = MuxLookup(
-    ld_type.asUInt,
+    ew_reg.ctrl.ld_type.asUInt,
     io.dcache.resp.bits.data.zext,
     Seq(
       LdType.LD_LH.asUInt -> lshift(15, 0).asSInt,
@@ -191,20 +314,42 @@ class Datapath(val conf: CoreConfig) extends Module {
   // CSR access
   csr.io.stall := stall
   csr.io.in := ew_reg.csr_in
-  csr.io.cmd := csr_cmd
+  csr.io.cmd := ew_reg.ctrl.csr_cmd
   csr.io.inst := ew_reg.inst
   csr.io.pc := ew_reg.pc
   csr.io.addr := ew_reg.alu
-  csr.io.illegal := illegal
+  csr.io.illegal := ew_reg.ctrl.illegal
   csr.io.pc_check := pc_check
-  csr.io.ld_type := ld_type
-  csr.io.st_type := st_type
+  csr.io.ld_type := ew_reg.ctrl.ld_type
+  csr.io.st_type := ew_reg.ctrl.st_type
   io.host <> csr.io.host
+
+  /**
+    * Mem/Writeback stage
+    */
+
+  // D$ access
+  val daddr = Mux(stall, ew_reg.alu, alu.io.sum) >> 2.U << 2.U
+  val woffset = (alu.io.sum(1) << 4.U).asUInt | (alu.io.sum(0) << 3.U).asUInt
+
+  // Note the request being made when the instruction is in the previous stage
+  io.dcache.req.valid := !stall && (de_reg.ctrl.st_type.asUInt.orR || de_reg.ctrl.ld_type.asUInt.orR)
+  io.dcache.req.bits.addr := daddr
+  io.dcache.req.bits.data := de_reg.rs2 << woffset
+  io.dcache.req.bits.mask := MuxLookup(
+    Mux(stall, ew_reg.ctrl.st_type, de_reg.ctrl.st_type).asUInt,
+    "b0000".U,
+    Seq(
+      StType.ST_SW.asUInt -> "b1111".U,
+      StType.ST_SH.asUInt -> ("b11".U << alu.io.sum(1, 0)),
+      StType.ST_SB.asUInt -> ("b1".U << alu.io.sum(1, 0))
+    )
+  )
 
   // Regfile Write
   val regWrite =
     MuxLookup(
-      wb_sel.asUInt,
+      ew_reg.ctrl.wb_sel.asUInt,
       ew_reg.alu.zext,
       Seq(
         WbSel.WB_MEM.asUInt -> load,
@@ -213,21 +358,38 @@ class Datapath(val conf: CoreConfig) extends Module {
       )
     ).asUInt
 
-  regFile.io.wen := wb_en && !stall && !csr.io.expt
+  regFile.io.wen := ew_reg.ctrl.wb_en && !stall && !csr.io.exception
   regFile.io.waddr := wb_rd_addr
   regFile.io.wdata := regWrite
 
   // Abort store when there's an excpetion
-  io.dcache.abort := csr.io.expt
+  io.dcache.abort := csr.io.exception
 
   // TODO: re-enable through AOP
-//  if (p(Trace)) {
-//    printf(
-//      "PC: %x, INST: %x, REG[%d] <- %x\n",
-//      ew_reg.pc,
-//      ew_reg.inst,
-//      Mux(regFile.io.wen, wb_rd_addr, 0.U),
-//      Mux(regFile.io.wen, regFile.io.wdata, 0.U)
-//    )
-//  }
+  if (conf.trace) {
+    printf(
+      "pc=[%x] W[r%d=%x][%d] Op1=[r%d][%x] Op2=[r%d][%x] inst=[%x] %c%c%c DASM(%x)\n",
+      ew_reg.pc,
+      wb_rd_addr,
+      regWrite,
+      ew_reg.ctrl.wb_en && !stall && !csr.io.exception,
+      ew_reg.inst(19, 15), // RS1 address
+      RegNext(de_reg.op1),
+      ew_reg.inst(24, 20), // RS2 address
+      RegNext(de_reg.op2),
+      ew_reg.inst,
+      Mux(io.ctrl.inst_kill, Str("K"), Str(" ")),
+      MuxLookup(
+        ew_reg.ctrl.pc_sel.asUInt,
+        Str("?"),
+        Seq(
+          PCSel.PC_4.asUInt -> MuxCase(Str(" "), IndexedSeq((ew_reg.ctrl.br_type =/= BrType.BR_XXX) -> Str("B"))),
+          PCSel.PC_ALU.asUInt -> Str("R"),
+          PCSel.PC_EPC.asUInt -> Str("E")
+        )
+      ),
+      Mux(csr.io.exception, Str("X"), Str(" ")),
+      ew_reg.inst
+    )
+  }
 }

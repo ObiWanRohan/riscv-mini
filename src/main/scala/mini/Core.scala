@@ -6,10 +6,12 @@ import chisel3._
 import chisel3.util.Valid
 
 case class CoreConfig(
-  xlen:       Int,
-  makeAlu:    Int => Alu = new AluSimple(_),
-  makeBrCond: Int => BrCond = new BrCondSimple(_),
-  makeImmGen: Int => ImmGen = new ImmGenWire(_))
+  trace:              Boolean = false,
+  xlen:               Int,
+  makeAlu:            Int => Alu = new AluSimple(_),
+  makeBrCond:         Int => BrCond = new BrCondSimple(_),
+  makeImmGen:         Int => ImmGen = new ImmGenWire(_),
+  makeForwardingUnit: Int => ForwardingUnit = new ForwardingUnit(_))
 
 class HostIO(xlen: Int) extends Bundle {
   val fromhost = Flipped(Valid(UInt(xlen.W)))

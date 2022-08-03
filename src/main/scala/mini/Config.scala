@@ -11,10 +11,12 @@ object MiniConfig {
     val xlen = 32
     Config(
       core = CoreConfig(
+        trace = false,
         xlen = xlen,
         makeAlu = new AluArea(_),
         makeBrCond = new BrCondArea(_),
-        makeImmGen = new ImmGenWire(_)
+        makeImmGen = new ImmGenWire(_),
+        makeForwardingUnit = new ForwardingUnit(_)
       ),
       cache = CacheConfig(
         nWays = 1,

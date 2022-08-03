@@ -75,6 +75,21 @@ object Control {
 }
 
 class ControlSignals extends Bundle {
+  val pc_sel = PCSel()
+  val inst_kill = Bool()
+  val A_sel = ASel()
+  val B_sel = BSel()
+  val imm_sel = ImmSel()
+  val alu_op = AluSel()
+  val br_type = BrType()
+  val st_type = StType()
+  val ld_type = LdType()
+  val wb_sel = WbSel()
+  val wb_en = Bool()
+  val csr_cmd = UInt(3.W)
+  val illegal = Bool()
+}
+class ControlSignalsIO extends Bundle {
   val inst = Input(UInt(32.W))
   val pc_sel = Output(PCSel())
   val inst_kill = Output(Bool())
@@ -92,17 +107,19 @@ class ControlSignals extends Bundle {
 }
 
 class Control extends Module {
-  val io = IO(new ControlSignals)
+  val io = IO(new ControlSignalsIO)
   val ctrlSignals = ListLookup(io.inst, Control.default, Control.map)
 
   // Control signals for Fetch
   io.pc_sel := ctrlSignals(0)
   io.inst_kill := ctrlSignals(6).asUInt.asBool
 
-  // Control signals for Execute
+  // Control signals for Decode
   io.A_sel := ctrlSignals(1)
   io.B_sel := ctrlSignals(2)
   io.imm_sel := ctrlSignals(3)
+
+  // Control signals for Execute
   io.alu_op := ctrlSignals(4)
   io.br_type := ctrlSignals(5)
   io.st_type := ctrlSignals(7)
