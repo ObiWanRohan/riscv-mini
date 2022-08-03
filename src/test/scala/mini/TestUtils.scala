@@ -18,6 +18,9 @@ object ExceptionTest extends DatapathTest {
   override def toString: String = "exception test"
 }
 // Define your own test
+object BasicAdditionTest extends DatapathTest {
+  override def toString(): String = "basic addition test"
+}
 
 trait TestUtils {
   implicit def boolToBoolean(x:   Bool):   Boolean = x.litValue == 1
@@ -221,10 +224,39 @@ trait TestUtils {
     I(Funct3.ADD, 31, 31, 1), // ADDI x31, x31, 1 # x31 <- 7
     fin
   )
-  val tests = Map(BypassTest -> bypassTest, ExceptionTest -> exceptionTest)
+  val basicAdditionTest = List(
+    I(Funct3.ADD, 1, 0, 1), // ADDI x1, x0, 1   # x1 <- 1
+    // nop,
+    // nop,
+    // nop,
+    I(Funct3.ADD, 1, 1, 1), // ADDI x1, x1, 1   # x1 <- 2
+    // nop,
+    // nop,
+    // nop,
+    I(Funct3.ADD, 1, 1, 1), // ADDI x1, x1, 1   # x1 <- 3
+    I(Funct3.ADD, 1, 1, 1), // ADDI x1, x1, 1   # x1 <- 4
+    // nop,
+    // nop,
+    // nop,
+    I(Funct3.ADD, 2, 1, 1), // ADDI x2, x1,  1 # x2 <- 5
+    I(Funct3.ADD, 3, 2, 1), // ADDI x3, x2,  1 # x3 <- 6
+    I(Funct3.ADD, 31, 0, 0), // ADDI x31, x0,  0 # x31 <- 0
+    // nop,
+    // nop,
+    // nop,
+    RU(Funct3.ADD, 31, 3, 2), // ADD x31, x3, x2  # x31 <- 11
+    // nop,
+    // nop,
+    // nop,
+    fin
+  )
+
+  val tests =
+    Map(BypassTest -> bypassTest, ExceptionTest -> exceptionTest, BasicAdditionTest -> basicAdditionTest)
   val testResults = Map(
     BypassTest -> 10,
-    ExceptionTest -> 4
+    ExceptionTest -> 4,
+    BasicAdditionTest -> 11
   )
 }
 

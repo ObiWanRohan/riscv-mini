@@ -89,6 +89,12 @@ class DatapathTests extends AnyFlatSpec with ChiselScalatestTester {
   val p = MiniConfig()
   val runWithVerilator = true
 
+  "Datapath" should "pass basic addition test with verilator" in {
+    test(new DatapathTester(new Datapath(p.core), BasicAdditionTest))
+      .withAnnotations(Seq(VerilatorBackendAnnotation, WriteVcdAnnotation))
+      .runUntilStop()
+  }
+
   Seq(BypassTest, ExceptionTest).foreach { tst =>
     if (!runWithVerilator) {
       "Datapath" should s"pass $tst" in {
@@ -102,6 +108,5 @@ class DatapathTests extends AnyFlatSpec with ChiselScalatestTester {
           .runUntilStop()
       }
     }
-
   }
 }
