@@ -262,7 +262,7 @@ class CSRTester(c: => CSR, trace: Boolean = false) extends BasicTester with Test
     assert(dut.io.out === rdata)
     assert(dut.io.epc === epc)
     assert(dut.io.evec === evec)
-    assert(dut.io.expt === exception)
+    assert(dut.io.exception === exception)
   }
 
   if (trace) {
@@ -281,14 +281,14 @@ class CSRTester(c: => CSR, trace: Boolean = false) extends BasicTester with Test
       case (addr, reg) => printf(s" ${addr.toString(16)} -> 0x%x\n", reg)
     }
     printf(
-      "[out] read: 0x%x =? 0x%x, epc: 0x%x =? 0x%x, evec: 0x%x ?= 0x%x, expt: %d ?= %d\n",
+      "[out] read: 0x%x =? 0x%x, epc: 0x%x =? 0x%x, evec: 0x%x ?= 0x%x, exception: %d ?= %d\n",
       dut.io.out,
       rdata,
       dut.io.epc,
       epc,
       dut.io.evec,
       evec,
-      dut.io.expt,
+      dut.io.exception,
       exception
     )
   }

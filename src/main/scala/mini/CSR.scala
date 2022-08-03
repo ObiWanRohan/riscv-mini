@@ -113,7 +113,7 @@ class CSRIO(xlen: Int) extends Bundle {
   val st_type = Input(StType())
   val ld_type = Input(LdType())
   val pc_check = Input(Bool())
-  val expt = Output(Bool())
+  val exception = Output(Bool())
   val evec = Output(UInt(xlen.W))
   val epc = Output(UInt(xlen.W))
   // HTIF
@@ -261,7 +261,7 @@ class CSR(val xlen: Int) extends Module {
     )
   )
 
-  io.expt := io.illegal || iaddrInvalid || laddrInvalid || saddrInvalid ||
+  io.exception := io.illegal || iaddrInvalid || laddrInvalid || saddrInvalid ||
     io.cmd(1, 0).orR && (!csrValid || !privValid) || wen && csrRO ||
     (privInst && !privValid) || isEcall || isEbreak
   io.evec := mtvec + (PRV << 6)
@@ -272,12 +272,12 @@ class CSR(val xlen: Int) extends Module {
   when(time.andR) { timeh := timeh + 1.U }
   cycle := cycle + 1.U
   when(cycle.andR) { cycleh := cycleh + 1.U }
-  val isInstRet = io.inst =/= Instructions.NOP && (!io.expt || isEcall || isEbreak) && !io.stall
+  val isInstRet = io.inst =/= Instructions.NOP && (!io.exception || isEcall || isEbreak) && !io.stall
   when(isInstRet) { instret := instret + 1.U }
   when(isInstRet && instret.andR) { instreth := instreth + 1.U }
 
   when(!io.stall) {
-    when(io.expt) {
+    when(io.exception) {
       mepc := io.pc >> 2 << 2
       mcause := MuxCase(
         Cause.IllegalInst,
