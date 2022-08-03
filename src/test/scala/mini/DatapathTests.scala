@@ -51,8 +51,9 @@ class DatapathTester(datapath: => Datapath, testType: DatapathTest) extends Basi
       mem((Const.PC_START / (xlen / 8)).U + cntr) := VecInit(insts)(cntr)
       when(done) {
         printf(s"Instructions for ${testType}:\n")
-        insts.foreach { inst =>
-          printf("%x\n", inst)
+        insts.zipWithIndex.foreach {
+          case (inst, index) =>
+            printf(s"Instruction $index : %x\n", inst)
         }
         state := sRun
       }
