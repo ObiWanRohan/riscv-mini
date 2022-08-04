@@ -52,6 +52,8 @@ class ForwardingUnitIO(width: Int) extends Bundle {
 
   val forward_exe_opA = Output(ForwardExeOperand())
   val forward_exe_opB = Output(ForwardExeOperand())
+  val forward_exe_rs1 = Output(ForwardExeOperand())
+  val forward_exe_rs2 = Output(ForwardExeOperand())
 
 }
 
@@ -120,6 +122,30 @@ class ForwardingUnit(width: Int) extends Module {
         && io.wb_en                     // Writeback is enabled
         && io.wb_sel === WbSel.WB_ALU         // We are writing the ALU value to the register
         && io.de_reg.ctrl.B_sel === BSel.B_RS2
+      ) -> ForwardExeOperand.FWD_EW
+    )
+  )
+
+  io.forward_exe_rs1 := MuxCase(
+    ForwardExeOperand.FWD_NONE,
+    IndexedSeq(
+      (
+        io.wb_rd === exe_rs1_addr       // The destination register is the same that is being read
+        && exe_rs1_addr.orR            // The destination register is not register x0
+        && io.wb_en                     // Writeback is enabled
+        && io.wb_sel === WbSel.WB_ALU         // We are writing the ALU value to the register
+      ) -> ForwardExeOperand.FWD_EW
+    )
+  )
+
+  io.forward_exe_rs2 := MuxCase(
+    ForwardExeOperand.FWD_NONE,
+    IndexedSeq(
+      (
+        io.wb_rd === exe_rs2_addr       // The destination register is the same that is being read
+        && exe_rs2_addr.orR            // The destination register is not register x0
+        && io.wb_en                     // Writeback is enabled
+        && io.wb_sel === WbSel.WB_ALU         // We are writing the ALU value to the register
       ) -> ForwardExeOperand.FWD_EW
     )
   )

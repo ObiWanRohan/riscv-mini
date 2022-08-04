@@ -247,6 +247,8 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   val ex_alu_op1 = Wire(UInt(conf.xlen.W))
   val ex_alu_op2 = Wire(UInt(conf.xlen.W))
+  val ex_rs1 = Wire(UInt(conf.xlen.W))
+  val ex_rs2 = Wire(UInt(conf.xlen.W))
 
   ex_alu_op1 := MuxCase(
     de_reg.op1,
@@ -263,6 +265,22 @@ class Datapath(val conf: CoreConfig) extends Module {
     )
   )
 
+  ex_rs1 := MuxCase(
+    de_reg.rs1,
+    IndexedSeq(
+      (forwardingUnit.io.forward_exe_rs1 === ForwardExeOperand.FWD_EW) -> ew_reg.alu,
+      (forwardingUnit.io.forward_exe_rs1 === ForwardExeOperand.FWD_NONE) -> de_reg.rs1
+    )
+  )
+
+  ex_rs2 := MuxCase(
+    de_reg.rs2,
+    IndexedSeq(
+      (forwardingUnit.io.forward_exe_rs2 === ForwardExeOperand.FWD_EW) -> ew_reg.alu,
+      (forwardingUnit.io.forward_exe_rs2 === ForwardExeOperand.FWD_NONE) -> de_reg.rs2
+    )
+  )
+
   // ALU operations
   alu.io.A := ex_alu_op1
   alu.io.B := ex_alu_op2
@@ -270,8 +288,8 @@ class Datapath(val conf: CoreConfig) extends Module {
   alu.io.alu_op := de_reg.ctrl.alu_op
 
   // Branch condition calc
-  brCond.io.rs1 := de_reg.rs1
-  brCond.io.rs2 := de_reg.rs2
+  brCond.io.rs1 := ex_rs1
+  brCond.io.rs2 := ex_rs2
   brCond.io.br_type := de_reg.ctrl.br_type
 
   // Pipelining
@@ -335,7 +353,7 @@ class Datapath(val conf: CoreConfig) extends Module {
   // Note the request being made when the instruction is in the previous stage
   io.dcache.req.valid := !stall && (de_reg.ctrl.st_type.asUInt.orR || de_reg.ctrl.ld_type.asUInt.orR)
   io.dcache.req.bits.addr := daddr
-  io.dcache.req.bits.data := de_reg.rs2 << woffset
+  io.dcache.req.bits.data := ex_rs2 << woffset
   io.dcache.req.bits.mask := MuxLookup(
     Mux(stall, ew_reg.ctrl.st_type, de_reg.ctrl.st_type).asUInt,
     "b0000".U,
