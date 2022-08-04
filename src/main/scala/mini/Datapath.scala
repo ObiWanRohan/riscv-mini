@@ -115,14 +115,16 @@ class Datapath(val conf: CoreConfig) extends Module {
     * *** Fetch Stage ***
     */
   val started = RegNext(reset.asBool)
-  val stall = !io.icache.resp.valid || !io.dcache.resp.valid
+
+  // Full pipeline stall for when the IMem or DMem is not responding
+  val full_stall = !io.icache.resp.valid || !io.dcache.resp.valid
 
   val pc = RegInit(Const.PC_START.U(conf.xlen.W) - 4.U(conf.xlen.W))
   // Next Program Counter
   val next_pc = MuxCase(
     pc + 4.U,
     IndexedSeq(
-      stall -> pc,
+      full_stall -> pc,
       csr.io.exception -> csr.io.evec,
       (de_reg.ctrl.pc_sel === PCSel.PC_EPC) -> csr.io.epc,
       ((de_reg.ctrl.pc_sel === PCSel.PC_ALU) || (brCond.io.taken)) -> (alu.io.sum >> 1.U << 1.U),
@@ -138,11 +140,11 @@ class Datapath(val conf: CoreConfig) extends Module {
   io.icache.req.bits.addr := next_pc
   io.icache.req.bits.data := 0.U
   io.icache.req.bits.mask := 0.U
-  io.icache.req.valid := !stall
+  io.icache.req.valid := !full_stall
   io.icache.abort := false.B
 
   // Pipelining
-  when(!stall) {
+  when(!full_stall) {
     fd_reg.pc := pc
     fd_reg.inst := inst
   }
@@ -294,9 +296,9 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   // Pipelining
 
-  when(reset.asBool || !stall && csr.io.exception) {
+  when(reset.asBool || !full_stall && csr.io.exception) {
     pc_check := false.B
-  }.elsewhen(!stall && !csr.io.exception) {
+  }.elsewhen(!full_stall && !csr.io.exception) {
     ew_reg.pc := de_reg.pc
     ew_reg.inst := de_reg.inst
     ew_reg.ctrl := de_reg.ctrl
@@ -330,7 +332,7 @@ class Datapath(val conf: CoreConfig) extends Module {
   )
 
   // CSR access
-  csr.io.stall := stall
+  csr.io.stall := full_stall
   csr.io.in := ew_reg.csr_in
   csr.io.cmd := ew_reg.ctrl.csr_cmd
   csr.io.inst := ew_reg.inst
@@ -347,15 +349,15 @@ class Datapath(val conf: CoreConfig) extends Module {
     */
 
   // D$ access
-  val daddr = Mux(stall, ew_reg.alu, alu.io.sum) >> 2.U << 2.U
+  val daddr = Mux(full_stall, ew_reg.alu, alu.io.sum) >> 2.U << 2.U
   val woffset = (alu.io.sum(1) << 4.U).asUInt | (alu.io.sum(0) << 3.U).asUInt
 
   // Note the request being made when the instruction is in the previous stage
-  io.dcache.req.valid := !stall && (de_reg.ctrl.st_type.asUInt.orR || de_reg.ctrl.ld_type.asUInt.orR)
+  io.dcache.req.valid := !full_stall && (de_reg.ctrl.st_type.asUInt.orR || de_reg.ctrl.ld_type.asUInt.orR)
   io.dcache.req.bits.addr := daddr
   io.dcache.req.bits.data := ex_rs2 << woffset
   io.dcache.req.bits.mask := MuxLookup(
-    Mux(stall, ew_reg.ctrl.st_type, de_reg.ctrl.st_type).asUInt,
+    Mux(full_stall, ew_reg.ctrl.st_type, de_reg.ctrl.st_type).asUInt,
     "b0000".U,
     Seq(
       StType.ST_SW.asUInt -> "b1111".U,
@@ -376,7 +378,7 @@ class Datapath(val conf: CoreConfig) extends Module {
       )
     ).asUInt
 
-  regFile.io.wen := ew_reg.ctrl.wb_en && !stall && !csr.io.exception
+  regFile.io.wen := ew_reg.ctrl.wb_en && !full_stall && !csr.io.exception
   regFile.io.waddr := wb_rd_addr
   regFile.io.wdata := regWrite
 
@@ -390,7 +392,7 @@ class Datapath(val conf: CoreConfig) extends Module {
       ew_reg.pc,
       wb_rd_addr,
       regWrite,
-      ew_reg.ctrl.wb_en && !stall && !csr.io.exception,
+      ew_reg.ctrl.wb_en && !full_stall && !csr.io.exception,
       ew_reg.inst(19, 15), // RS1 address
       RegNext(de_reg.op1),
       ew_reg.inst(24, 20), // RS2 address
