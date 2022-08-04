@@ -75,35 +75,84 @@ object Control {
 }
 
 class ControlSignals extends Bundle {
+
+  // ===== Fetch Stage Signals =====
+  // Next PC Selector
   val pc_sel = PCSel()
-  val inst_kill = Bool()
-  val A_sel = ASel()
-  val B_sel = BSel()
+
+  // ===== Decode Stage Signals =====
+  // Immediate type selector
   val imm_sel = ImmSel()
+  // Operand A selector
+  val A_sel = ASel()
+  // Operand B selector
+  val B_sel = BSel()
+
+  // ===== Execute Stage Signals =====
+  val inst_kill = Bool()
+  // Kill the pipeline before the Execute stage (for jump or branch instructions)
+  val pipeline_kill = Bool()
+  // ALU Operation Selector
   val alu_op = AluSel()
+  // Branch Type Selector
   val br_type = BrType()
+  // Store Type Selector
   val st_type = StType()
+  // Load Type Selector
   val ld_type = LdType()
-  val wb_sel = WbSel()
-  val wb_en = Bool()
+
+  // CSR
   val csr_cmd = UInt(3.W)
   val illegal = Bool()
+
+  // ===== Writeback Stage Signals =====
+  // Writeback source Selector
+  val wb_sel = WbSel()
+  // Writeback enable
+  val wb_en = Bool()
+
 }
 class ControlSignalsIO extends Bundle {
+
+  // Instruction input from fetch stage
   val inst = Input(UInt(32.W))
+
+  // ===== Fetch Stage Signals =====
+
+  // Next PC Selector
   val pc_sel = Output(PCSel())
-  val inst_kill = Output(Bool())
-  val A_sel = Output(ASel())
-  val B_sel = Output(BSel())
+
+  // ===== Decode Stage Signals =====\
+  // Immediate type selector
   val imm_sel = Output(ImmSel())
+  // Operand A selector
+  val A_sel = Output(ASel())
+  // Operand B selector
+  val B_sel = Output(BSel())
+
+  // ===== Execute Stage Signals =====
+  val inst_kill = Output(Bool())
+  // Kill the pipeline before the Execute stage (for jump or branch instructions)
+  val pipeline_kill = Output(Bool())
+  // ALU Operation Selector
   val alu_op = Output(AluSel())
+  // Branch Type Selector
   val br_type = Output(BrType())
+  // Store Type Selector
   val st_type = Output(StType())
+  // Load Type Selector
   val ld_type = Output(LdType())
-  val wb_sel = Output(WbSel())
-  val wb_en = Output(Bool())
+
+  // CSR
   val csr_cmd = Output(UInt(3.W))
   val illegal = Output(Bool())
+
+  // ===== Writeback Stage Signals =====
+  // Writeback source Selector
+  val wb_sel = Output(WbSel())
+  // Writeback enable
+  val wb_en = Output(Bool())
+
 }
 
 class Control extends Module {
@@ -113,6 +162,7 @@ class Control extends Module {
   // Control signals for Fetch
   io.pc_sel := ctrlSignals(0)
   io.inst_kill := ctrlSignals(6).asUInt.asBool
+  io.pipeline_kill := ctrlSignals(6).asUInt.asBool
 
   // Control signals for Decode
   io.A_sel := ctrlSignals(1)
