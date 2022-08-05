@@ -4,10 +4,10 @@ base_dir   = $(abspath .)
 src_dir    = $(base_dir)/src/main
 gen_dir    = $(base_dir)/generated-src
 out_dir    = $(base_dir)/outputs
-nproc      = $(shell nproc --ignore 1)
+nproc      = $(shell nproc --ignore 1)		# Keep 1 core for other tasks
 
 SBT       = sbt
-SBT_FLAGS = -ivy $(base_dir)/.ivy2
+SBT_FLAGS = --ivy $(base_dir)/.ivy2
 
 sbt:
 	$(SBT) $(SBT_FLAGS)
@@ -61,10 +61,16 @@ test:
 test-quick:
 	$(SBT) $(SBT_FLAGS) testQuick
 
+test-datapath:
+	$(SBT) $(SBT_FLAGS) "testOnly mini.DatapathTests"
+
+test-isa:
+	$(SBT) $(SBT_FLAGS) "testOnly mini.CoreISATests"
+
 clean:
 	rm -rf $(gen_dir) $(out_dir) test_run_dir
 
 cleanall: clean
 	rm -rf target project/target
 
-.PHONY: sbt compile verilator run-tests run-custom-bmark test test-quick clean cleanall
+.PHONY: sbt compile verilator run-tests run-custom-bmark test test-quick test-datapath test-isa clean cleanall
