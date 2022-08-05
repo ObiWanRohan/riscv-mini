@@ -7,6 +7,7 @@ import chisel3.util._
 import chisel3.experimental.BundleLiterals._
 
 import mini.common._
+import mini.common.RISCVConstants._
 
 object Const {
   val PC_START = 0x200
@@ -161,9 +162,9 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   // regFile read
   // Register number fields from instruction
-  val dec_rd_addr = fd_reg.inst(11, 7) // Destination Register Address
-  val dec_rs1_addr = fd_reg.inst(19, 15) // Source Register 1 Address
-  val dec_rs2_addr = fd_reg.inst(24, 20) // Source Register 2 Address
+  val dec_rd_addr = fd_reg.inst(RD_MSB, RD_LSB) // Destination Register Address
+  val dec_rs1_addr = fd_reg.inst(RS1_MSB, RS1_LSB) // Source Register 1 Address
+  val dec_rs2_addr = fd_reg.inst(RS2_MSB, RS2_LSB) // Source Register 2 Address
 
   // Connecting register address for read
   regFile.io.raddr1 := dec_rs1_addr
@@ -236,8 +237,8 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   }
 
-  val de_rs1_addr = de_reg.inst(19, 15)
-  val de_rs2_addr = de_reg.inst(24, 20)
+  val de_rs1_addr = de_reg.inst(RS1_MSB, RS1_LSB)
+  val de_rs2_addr = de_reg.inst(RS2_MSB, RS2_LSB)
 
   forwardingUnit.io.de_reg := de_reg
 
@@ -245,7 +246,7 @@ class Datapath(val conf: CoreConfig) extends Module {
     * *** Execute Stage ***
     */
 
-  val wb_rd_addr = ew_reg.inst(11, 7)
+  val wb_rd_addr = ew_reg.inst(RD_MSB, RD_LSB)
 
   val ex_alu_op1 = Wire(UInt(conf.xlen.W))
   val ex_alu_op2 = Wire(UInt(conf.xlen.W))
@@ -393,9 +394,9 @@ class Datapath(val conf: CoreConfig) extends Module {
       wb_rd_addr,
       regWrite,
       ew_reg.ctrl.wb_en && !full_stall && !csr.io.exception,
-      ew_reg.inst(19, 15), // RS1 address
+      ew_reg.inst(RS1_MSB, RS1_LSB), // RS1 address
       RegNext(de_reg.op1),
-      ew_reg.inst(24, 20), // RS2 address
+      ew_reg.inst(RS2_MSB, RS2_LSB), // RS2 address
       RegNext(de_reg.op2),
       ew_reg.inst,
       Mux(io.ctrl.inst_kill, Str("K"), Str(" ")),
