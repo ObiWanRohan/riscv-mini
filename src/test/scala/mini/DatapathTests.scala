@@ -23,7 +23,15 @@ class DatapathTester(datapath: => Datapath, testType: DatapathTest) extends Basi
   dut.io.host.fromhost.bits := DontCare
   dut.io.host.fromhost.valid := false.B
 
+  // Inserting NOPs between every instruction to check every instruction for correctness
+  // override val insts = for {
+  //   x <- tests(testType)
+  //   p <- List(nop, nop, nop, x)
+  // } yield p
+
+  // Original instructions
   override val insts = tests(testType)
+
   val maxTimeout = 100.U
 
   import DatapathTesterState._
@@ -95,7 +103,7 @@ class DatapathTests extends AnyFlatSpec with ChiselScalatestTester {
       .runUntilStop()
   }
 
-  Seq(BypassTest, ExceptionTest).foreach { tst =>
+  Seq(BypassTest, ExceptionTest, SimpleBranchJumpTest).foreach { tst =>
     if (!runWithVerilator) {
       "Datapath" should s"pass $tst" in {
         // printf("Instructions for %s: \n %x", tst, insts.map(inst => Hexadecimal(inst)))
