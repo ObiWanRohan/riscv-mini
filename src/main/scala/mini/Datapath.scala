@@ -39,7 +39,7 @@ class DecodeExecutePipelineRegister(xlen: Int) extends Bundle {
 
   val ctrl = new ControlSignals
 
-  // This holds the address for the writeback
+  // This held the address for the writeback
   // Disabled for now since the address can be taken from the instruction
   // val wb = Reg(UInt())
 }
@@ -118,14 +118,46 @@ class Datapath(val conf: CoreConfig) extends Module {
   val started = RegNext(reset.asBool)
 
   // Full pipeline stall for when the IMem or DMem is not responding
+  // This can also be called cache_miss_stall
   val full_stall = !io.icache.resp.valid || !io.dcache.resp.valid
+
+  // Decode Stage Stall
+  // Can also be called hazard_stall
+  val dec_stall = Wire(Bool())
+
+  // Currently only stalling on load hazards
+  dec_stall := (
+    de_reg.ctrl.ld_type =/= LdType.LD_XXX // Instruction in Execute stage is a load
+      && (
+        (de_reg.inst(RD_MSB, RD_LSB) === fd_reg.inst(RS1_MSB, RS1_LSB))
+          || (de_reg.inst(RD_MSB, RD_LSB) === fd_reg.inst(RS2_MSB, RS2_LSB))
+      ) // And instruction in decode stage is reading the loaded value
+  ) || (
+    ew_reg.ctrl.ld_type =/= LdType.LD_XXX // Instruction in Writeback stage is a load
+      && (
+        (ew_reg.inst(RD_MSB, RD_LSB) === fd_reg.inst(RS1_MSB, RS1_LSB))
+          || (ew_reg.inst(RD_MSB, RD_LSB) === fd_reg.inst(RS2_MSB, RS2_LSB))
+      ) // And instruction in decode stage is reading the loaded value
+  )
+
+  // Kill Fetch stage
+  // This means the instruction in the fetch stage will not pass to the decode stage
+  // and a NOP will be inserted instead
+  val if_kill = (
+    (de_reg.ctrl.pc_sel =/= PCSel.PC_4)
+    // || cs_fencei || RegNext(cs_fencei) // Will add later
+  )
+  // Kill Decode stage
+  // This means the instruction in the decode stage will not pass to the execute stage
+  // and a NOP will be inserted instead
+  val dec_kill = (de_reg.ctrl.pc_sel =/= PCSel.PC_4)
 
   val pc = RegInit(Const.PC_START.U(conf.xlen.W) - 4.U(conf.xlen.W))
   // Next Program Counter
   val next_pc = MuxCase(
     pc + 4.U,
     IndexedSeq(
-      full_stall -> pc,
+      (full_stall || dec_stall) -> pc,
       csr.io.exception -> csr.io.evec,
       (de_reg.ctrl.pc_sel === PCSel.PC_EPC) -> csr.io.epc,
       ((de_reg.ctrl.pc_sel === PCSel.PC_ALU) || (brCond.io.taken)) -> (alu.io.sum >> 1.U << 1.U),
@@ -133,9 +165,8 @@ class Datapath(val conf: CoreConfig) extends Module {
     )
   )
 
-  val fetch_kill = io.ctrl.inst_kill || brCond.io.taken
   val inst =
-    Mux(started || fetch_kill || csr.io.exception, Instructions.NOP, io.icache.resp.bits.data)
+    Mux(started || csr.io.exception, Instructions.NOP, io.icache.resp.bits.data)
 
   pc := next_pc
   io.icache.req.bits.addr := next_pc
@@ -145,7 +176,8 @@ class Datapath(val conf: CoreConfig) extends Module {
   io.icache.abort := false.B
 
   // Pipelining
-  when(!full_stall) {
+  // Only update the instruction when not stalling
+  when(!full_stall && !dec_stall) {
     fd_reg.pc := pc
     fd_reg.inst := inst
   }
@@ -198,43 +230,74 @@ class Datapath(val conf: CoreConfig) extends Module {
   )
 
   // Connect Pipelining Registers
+
   // Get new instruction only when a branch/jump is not happening
-  when(!brCond.io.taken && de_reg.ctrl.pc_sel =/= PCSel.PC_ALU) {
+  val fetch_kill = (
+    de_reg.ctrl.inst_kill // Instruction needs to insert a bubble
+      || brCond.io.taken // Branch instruction executed and branch taken
+      || de_reg.ctrl.pc_sel === PCSel.PC_ALU // Jump instruction executed
+  )
+
+  when(!full_stall) {
     de_reg.pc := fd_reg.pc
-    de_reg.inst := fd_reg.inst
-    de_reg.ctrl := io.ctrl
-    de_reg.rs1 := rs1
-    de_reg.rs2 := rs2
-    de_reg.immOut := immGen.io.out
 
-    // Mux to bypass register from writeback stage
-    de_reg.op1 := MuxCase(
-      rs1,
-      IndexedSeq(
-        (io.ctrl.A_sel === ASel.A_RS1) -> rs1,
-        (io.ctrl.A_sel === ASel.A_PC) -> fd_reg.pc
+    when(!dec_stall && !dec_kill) {
+      de_reg.inst := fd_reg.inst
+      de_reg.ctrl := io.ctrl
+
+      de_reg.rs1 := rs1
+      de_reg.rs2 := rs2
+      de_reg.immOut := immGen.io.out
+
+      // Mux to bypass register from writeback stage
+      de_reg.op1 := MuxCase(
+        rs1,
+        IndexedSeq(
+          (io.ctrl.A_sel === ASel.A_RS1) -> rs1,
+          (io.ctrl.A_sel === ASel.A_PC) -> fd_reg.pc
+        )
       )
-    )
 
-    de_reg.op2 := MuxCase(
-      rs2,
-      IndexedSeq(
-        (io.ctrl.B_sel === BSel.B_RS2) -> rs2,
-        (io.ctrl.B_sel === BSel.B_IMM) -> immGen.io.out
+      de_reg.op2 := MuxCase(
+        rs2,
+        IndexedSeq(
+          (io.ctrl.B_sel === BSel.B_RS2) -> rs2,
+          (io.ctrl.B_sel === BSel.B_IMM) -> immGen.io.out
+        )
       )
-    )
 
-  }.otherwise {
-    de_reg.pc := fd_reg.pc
-    de_reg.inst := Instructions.NOP
-    de_reg.ctrl := io.ctrl
+    }.otherwise {
+      // Insert NOP when Decode is stalled
+      // Advance instruction from Fetch stage
 
-    // Keeping these the same
-    de_reg.rs2 := 0.U
-    de_reg.immOut := 0.U
-    de_reg.op1 := 0.U
-    de_reg.op2 := 0.U
+      de_reg.inst := Instructions.NOP
 
+      // TODO: Find a more optimal way for this than hardcoding
+      // Manually hardcoded to control signals for Bubble instruction (XOR x0, x0, x0)
+      de_reg.ctrl := (new ControlSignals).Lit(
+        _.pc_sel -> PCSel.PC_4,
+        _.A_sel -> ASel.A_RS1,
+        _.B_sel -> BSel.B_RS2,
+        _.imm_sel -> ImmSel.IMM_X,
+        _.alu_op -> AluSel.ALU_XOR,
+        _.br_type -> BrType.BR_XXX,
+        _.inst_kill -> N.asUInt.asBool,
+        _.pipeline_kill -> N.asUInt.asBool,
+        _.st_type -> StType.ST_XXX,
+        _.ld_type -> LdType.LD_XXX,
+        _.wb_sel -> WbSel.WB_ALU,
+        _.wb_en -> Y.asUInt.asBool,
+        _.csr_cmd -> CSR.N,
+        _.illegal -> N
+      )
+
+      de_reg.rs1 := 0.U
+      de_reg.rs2 := 0.U
+      de_reg.immOut := 0.U
+      de_reg.op1 := 0.U
+      de_reg.op2 := 0.U
+
+    }
   }
 
   val de_rs1_addr = de_reg.inst(RS1_MSB, RS1_LSB)
@@ -312,6 +375,7 @@ class Datapath(val conf: CoreConfig) extends Module {
     // Might need to convert this to a wire and make it a MuxLookup
     pc_check := de_reg.ctrl.pc_sel === PCSel.PC_ALU
   }
+
   forwardingUnit.io.ew_reg := ew_reg
 
   forwardingUnit.io.wb_rd := wb_rd_addr
