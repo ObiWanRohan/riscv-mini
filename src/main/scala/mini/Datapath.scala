@@ -109,7 +109,7 @@ class Datapath(val conf: CoreConfig) extends Module {
   // val wb_sel = Reg(io.ctrl.wb_sel.cloneType)
   // val wb_en = Reg(Bool())
   // val csr_cmd = Reg(io.ctrl.csr_cmd.cloneType)
-  // val illegal = Reg(Bool())
+  val illegal = Reg(Bool())
   val pc_check = Reg(Bool())
 
   /**
@@ -199,7 +199,7 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   // Connect Pipelining Registers
   // Get new instruction only when a branch/jump is not happening
-  when(!brCond.io.taken && de_reg.ctrl.pc_sel =/= PCSel.PC_ALU) {
+  when(!brCond.io.taken && de_reg.ctrl.pc_sel =/= PCSel.PC_ALU && !csr.io.exception) {
     de_reg.pc := fd_reg.pc
     de_reg.inst := fd_reg.inst
     de_reg.ctrl := io.ctrl
@@ -227,9 +227,26 @@ class Datapath(val conf: CoreConfig) extends Module {
   }.otherwise {
     de_reg.pc := fd_reg.pc
     de_reg.inst := Instructions.NOP
-    de_reg.ctrl := io.ctrl
+    // de_reg.ctrl := io.ctrl
+    de_reg.ctrl := (new ControlSignals).Lit(
+        _.pc_sel -> PCSel.PC_4,
+        _.A_sel -> ASel.A_RS1,
+        _.B_sel -> BSel.B_RS2,
+        _.imm_sel -> ImmSel.IMM_X,
+        _.alu_op -> AluSel.ALU_XOR,
+        _.br_type -> BrType.BR_XXX,
+        _.inst_kill -> N.asUInt.asBool,
+        _.pipeline_kill -> N.asUInt.asBool,
+        _.st_type -> StType.ST_XXX,
+        _.ld_type -> LdType.LD_XXX,
+        _.wb_sel -> WbSel.WB_ALU,
+        _.wb_en -> Y.asUInt.asBool,
+        _.csr_cmd -> CSR.N,
+        _.illegal -> N
+      )
 
     // Keeping these the same
+    de_reg.rs1 := 0.U
     de_reg.rs2 := 0.U
     de_reg.immOut := 0.U
     de_reg.op1 := 0.U
@@ -299,12 +316,16 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   when(reset.asBool || !full_stall && csr.io.exception) {
     pc_check := false.B
+    illegal := false.B
+
   }.elsewhen(!full_stall && !csr.io.exception) {
     ew_reg.pc := de_reg.pc
     ew_reg.inst := de_reg.inst
     ew_reg.ctrl := de_reg.ctrl
     ew_reg.rs2 := de_reg.rs2
     ew_reg.alu := alu.io.out
+
+    illegal := de_reg.ctrl.illegal
 
     // ew_reg.csr_in := Mux(de_reg.ctrl.imm_sel === ImmSel.IMM_Z, de_reg.immOut, de_reg.op1)
     ew_reg.csr_in := alu.io.out
@@ -339,7 +360,8 @@ class Datapath(val conf: CoreConfig) extends Module {
   csr.io.inst := ew_reg.inst
   csr.io.pc := ew_reg.pc
   csr.io.addr := ew_reg.alu
-  csr.io.illegal := ew_reg.ctrl.illegal
+  // csr.io.illegal := ew_reg.ctrl.illegal
+  csr.io.illegal := illegal
   csr.io.pc_check := pc_check
   csr.io.ld_type := ew_reg.ctrl.ld_type
   csr.io.st_type := ew_reg.ctrl.st_type

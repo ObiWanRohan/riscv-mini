@@ -13,6 +13,7 @@ DVEfiles
 riscv-tools-priv1.7
 tests/32/*
 tests/64/*
+mini3stagetests
 
 # Scala IDEs
 .project
@@ -31,3 +32,6 @@ tests/64/*
 novas_dump.log
 ucli.key
 
+
+#gtkwave config files
+*.gtkw
