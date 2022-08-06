@@ -216,7 +216,7 @@ trait TestUtils {
     RU(Funct3.ADD, 29, 28, 4), //15 ADD x29, x28, x4  # x29 <- 5
     RU(Funct3.ADD, 30, 29, 5), //16 ADD x30, x29, x5  # x30 <- 9
     RU(Funct3.ADD, 31, 30, 6), //17 ADD x31, x31, x6  # x31 <- 10
-    fin  //18
+    fin //18
   )
 
   val simpleBranchJumpTest = List(
