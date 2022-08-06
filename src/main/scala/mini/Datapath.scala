@@ -229,21 +229,21 @@ class Datapath(val conf: CoreConfig) extends Module {
     de_reg.inst := Instructions.NOP
     // de_reg.ctrl := io.ctrl
     de_reg.ctrl := (new ControlSignals).Lit(
-        _.pc_sel -> PCSel.PC_4,
-        _.A_sel -> ASel.A_RS1,
-        _.B_sel -> BSel.B_RS2,
-        _.imm_sel -> ImmSel.IMM_X,
-        _.alu_op -> AluSel.ALU_XOR,
-        _.br_type -> BrType.BR_XXX,
-        _.inst_kill -> N.asUInt.asBool,
-        _.pipeline_kill -> N.asUInt.asBool,
-        _.st_type -> StType.ST_XXX,
-        _.ld_type -> LdType.LD_XXX,
-        _.wb_sel -> WbSel.WB_ALU,
-        _.wb_en -> Y.asUInt.asBool,
-        _.csr_cmd -> CSR.N,
-        _.illegal -> N
-      )
+      _.pc_sel -> PCSel.PC_4,
+      _.A_sel -> ASel.A_RS1,
+      _.B_sel -> BSel.B_RS2,
+      _.imm_sel -> ImmSel.IMM_X,
+      _.alu_op -> AluSel.ALU_XOR,
+      _.br_type -> BrType.BR_XXX,
+      _.inst_kill -> N.asUInt.asBool,
+      _.pipeline_kill -> N.asUInt.asBool,
+      _.st_type -> StType.ST_XXX,
+      _.ld_type -> LdType.LD_XXX,
+      _.wb_sel -> WbSel.WB_ALU,
+      _.wb_en -> Y.asUInt.asBool,
+      _.csr_cmd -> CSR.N,
+      _.illegal -> N
+    )
 
     // Keeping these the same
     de_reg.rs1 := 0.U
