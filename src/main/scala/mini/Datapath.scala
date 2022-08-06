@@ -109,7 +109,7 @@ class Datapath(val conf: CoreConfig) extends Module {
   // val wb_sel = Reg(io.ctrl.wb_sel.cloneType)
   // val wb_en = Reg(Bool())
   // val csr_cmd = Reg(io.ctrl.csr_cmd.cloneType)
-  // val illegal = Reg(Bool())
+  val illegal = Reg(Bool())
   val pc_check = Reg(Bool())
 
   /**
@@ -150,7 +150,7 @@ class Datapath(val conf: CoreConfig) extends Module {
   // Kill Decode stage
   // This means the instruction in the decode stage will not pass to the execute stage
   // and a NOP will be inserted instead
-  val dec_kill = (de_reg.ctrl.pc_sel =/= PCSel.PC_4)
+  val dec_kill = (de_reg.ctrl.pc_sel =/= PCSel.PC_4) || illegal
 
   val pc = RegInit(Const.PC_START.U(conf.xlen.W) - 4.U(conf.xlen.W))
   // Next Program Counter
@@ -362,12 +362,16 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   when(reset.asBool || !full_stall && csr.io.exception) {
     pc_check := false.B
+    illegal := false.B
+
   }.elsewhen(!full_stall && !csr.io.exception) {
     ew_reg.pc := de_reg.pc
     ew_reg.inst := de_reg.inst
     ew_reg.ctrl := de_reg.ctrl
     ew_reg.rs2 := de_reg.rs2
     ew_reg.alu := alu.io.out
+
+    illegal := de_reg.ctrl.illegal
 
     // ew_reg.csr_in := Mux(de_reg.ctrl.imm_sel === ImmSel.IMM_Z, de_reg.immOut, de_reg.op1)
     ew_reg.csr_in := alu.io.out
@@ -403,7 +407,7 @@ class Datapath(val conf: CoreConfig) extends Module {
   csr.io.inst := ew_reg.inst
   csr.io.pc := ew_reg.pc
   csr.io.addr := ew_reg.alu
-  csr.io.illegal := ew_reg.ctrl.illegal
+  csr.io.illegal := illegal
   csr.io.pc_check := pc_check
   csr.io.ld_type := ew_reg.ctrl.ld_type
   csr.io.st_type := ew_reg.ctrl.st_type
