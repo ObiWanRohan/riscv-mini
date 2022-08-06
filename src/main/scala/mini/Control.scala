@@ -122,7 +122,7 @@ class ControlSignalsIO extends Bundle {
   // Next PC Selector
   val pc_sel = Output(PCSel())
 
-  // ===== Decode Stage Signals =====\
+  // ===== Decode Stage Signals =====
   // Immediate type selector
   val imm_sel = Output(ImmSel())
   // Operand A selector
