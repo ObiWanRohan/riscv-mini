@@ -78,7 +78,7 @@ void tick() {
 int main(int argc, char** argv) {
 
   const char* vcdFileName = NULL;
-  uint64_t timeout = 0;
+  uint64_t timeout = 500;
 
   const char* hexFileName = NULL;
 
