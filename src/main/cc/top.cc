@@ -24,9 +24,6 @@ VerilatedVcdC* tfp;
 #endif
 mm_magic_t* mem; // target memory
 
-// TODO Provide command-line options like vcd filename, timeout count, etc.
-const long timeout = 100000000L;
-
 void tick() {
   top->clock = 1;
   top->eval();
@@ -79,17 +76,57 @@ void tick() {
 }
 
 int main(int argc, char** argv) {
+
+  const char* vcdFileName = NULL;
+  uint64_t timeout = 0;
+
+  const char* hexFileName = NULL;
+
+  const char* helpMessage = "usage: VTile <hex filename> [-v <vcd filename>] [-h | --help] [-t <timeout>]";
+
+  if (argc < 2) {
+    cerr << "Incorrect Usage.\n" << helpMessage << endl;
+    return 0;
+  }
+
+  for (auto i = 1; i < argc; i++) {
+    string arg = argv[i];
+
+    if (arg == "-v") {
+      vcdFileName = argv[i + 1];
+      continue;
+    }
+    else if (arg == "-t") {
+      timeout = atoll(argv[i + 1]);
+      continue;
+    }
+    else if (arg == "--help" || arg == "-h") {
+      cerr << helpMessage << endl;
+      return 0;
+    }
+  }
+
+  hexFileName = argv[1];
+  if (!vcdFileName) {
+    vcdFileName = "dump.vcd";
+  }
+
+  cout << "Using hex file : '" << hexFileName << "'\n";
+  cout << "Writing to VCD File : '" << vcdFileName << "'\n";
+  cout << "Max Cycles : '" << timeout << "'\n";
+
+
   Verilated::commandArgs(argc, argv);   // Remember args
   top = new VTile; // target design
   mem = new mm_magic_t(1L << 32, 8); // target memory
-  load_mem(mem->get_data(), (const char*)(argv[1])); // load hex
+  load_mem(mem->get_data(), hexFileName); // load hex
 
 #if VM_TRACE			// If verilator was invoked with --trace
   Verilated::traceEverOn(true);	// Verilator must compute traced signals
   VL_PRINTF("Enabling waves...\n");
   tfp = new VerilatedVcdC;
   top->trace(tfp, 99);	// Trace 99 levels of hierarchy
-  tfp->open(argc > 2 ? argv[2] : "dump.vcd"); // Open the dump file
+  tfp->open(vcdFileName); // Open the dump file
 #endif
 
   cout << "Starting simulation!\n";
