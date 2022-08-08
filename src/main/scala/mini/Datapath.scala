@@ -179,7 +179,11 @@ class Datapath(val conf: CoreConfig) extends Module {
   // Only update the instruction when not stalling
   when(!full_stall && !dec_stall) {
     fd_reg.pc := pc
-    fd_reg.inst := inst
+    when(if_kill) {
+      fd_reg.inst := Instructions.NOP
+    }.otherwise {
+      fd_reg.inst := inst
+    }
   }
 
   forwardingUnit.io.fd_reg := fd_reg
