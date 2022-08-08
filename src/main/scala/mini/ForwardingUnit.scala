@@ -9,7 +9,7 @@ object ForwardDecOperand extends ChiselEnum {
   // Don't forward anything
   val FWD_NONE = Value(0.U)
   // Forward value from EW pipeline register
-  val FWD_EW = Value(2.U)
+  val FWD_EM = Value(2.U)
 }
 
 // Forwarding options for Execute stage
@@ -17,12 +17,19 @@ object ForwardExeOperand extends ChiselEnum {
   // Don't forward anything
   val FWD_NONE = Value(0.U)
   // Forward value from EW pipeline register
-  val FWD_EW = Value(2.U)
+  val FWD_EM = Value(2.U)
+}
+
+object ForwardMemLoad extends ChiselEnum {
+  // Don't forward anyting
+  val FWD_NONE = Value(0.U)
+  // forward the load data from mem back to Execute stage Input
+  val FWD_LD = Value(2.U)
 }
 
 class ForwardingUnitIO(width: Int) extends Bundle {
 
-  import mini.{DecodeExecutePipelineRegister, ExecuteWritebackPipelineRegister, FetchDecodePipelineRegister}
+  import mini.{DecodeExecutePipelineRegister, ExecuteMemoryPipelineRegister, MemoryWritebackPipelineRegister, FetchDecodePipelineRegister}
   import CPUControlSignalTypes._
 
   // Can add a global constant for the register address width
@@ -33,7 +40,8 @@ class ForwardingUnitIO(width: Int) extends Bundle {
    */
   val fd_reg = Input(new FetchDecodePipelineRegister(width))
   val de_reg = Input(new DecodeExecutePipelineRegister(width))
-  val ew_reg = Input(new ExecuteWritebackPipelineRegister(width))
+  val em_reg = Input(new ExecuteMemoryPipelineRegister(width))
+  val mw_reg = Input(new MemoryWritebackPipelineRegister(width))
 
   // Source register addresses from decode stage
 
@@ -83,7 +91,7 @@ class ForwardingUnit(width: Int) extends Module {
         && dec_rs1_addr.orR         // The destination register is not register x0
         && io.wb_en                   // Writeback is enabled
         && io.wb_sel === WbSel.WB_ALU       // We are writing the ALU value to the register
-      ) -> ForwardDecOperand.FWD_EW
+      ) -> ForwardDecOperand.FWD_EM
     )
   )
   io.forward_dec_opB := MuxCase(
@@ -94,7 +102,7 @@ class ForwardingUnit(width: Int) extends Module {
         && dec_rs2_addr.orR           // The destination register is not register x0
         && io.wb_en                     // Writeback is enabled
         && io.wb_sel === WbSel.WB_ALU         // We are writing the ALU value to the register
-      ) -> ForwardDecOperand.FWD_EW
+      ) -> ForwardDecOperand.FWD_EM
     )
   )
 
@@ -110,8 +118,12 @@ class ForwardingUnit(width: Int) extends Module {
         && exe_rs1_addr.orR          // The destination register is not register x0
         && io.wb_en                   // Writeback is enabled
         && io.wb_sel === WbSel.WB_ALU       // We are writing the ALU value to the register
-      ) -> ForwardExeOperand.FWD_EW
+      ) -> ForwardExeOperand.FWD_EM
     )
+
+    // ADD CONTROL LOGIC FOR LOAD USE HAZARD -- when load mem into reg is followed by use -> one cycle stall(bubble) @exe + bypass path
+    // when load mem into reg is follwed by use after 1 cycle delay -- decode stage -- use bypass path
+    // in this style of bypass paths, how do we update the ALU.opB to have path from mem stage
   )
   io.forward_exe_opB := MuxCase(
     ForwardExeOperand.FWD_NONE,
@@ -122,7 +134,10 @@ class ForwardingUnit(width: Int) extends Module {
         && io.wb_en                     // Writeback is enabled
         && io.wb_sel === WbSel.WB_ALU         // We are writing the ALU value to the register
         && io.de_reg.ctrl.B_sel === BSel.B_RS2
-      ) -> ForwardExeOperand.FWD_EW
+      ) -> ForwardExeOperand.FWD_EM,
+      (
+        // CONTROL LOGIC FOR LOAD BYPASS
+      )
     )
   )
 
@@ -134,7 +149,7 @@ class ForwardingUnit(width: Int) extends Module {
         && exe_rs1_addr.orR            // The destination register is not register x0
         && io.wb_en                     // Writeback is enabled
         && io.wb_sel === WbSel.WB_ALU         // We are writing the ALU value to the register
-      ) -> ForwardExeOperand.FWD_EW
+      ) -> ForwardExeOperand.FWD_EM
     )
   )
 
@@ -146,7 +161,7 @@ class ForwardingUnit(width: Int) extends Module {
         && exe_rs2_addr.orR            // The destination register is not register x0
         && io.wb_en                     // Writeback is enabled
         && io.wb_sel === WbSel.WB_ALU         // We are writing the ALU value to the register
-      ) -> ForwardExeOperand.FWD_EW
+      ) -> ForwardExeOperand.FWD_EM
     )
   )
 
