@@ -6,6 +6,8 @@ object RISCVConstants {
 
   // abstract out instruction decode magic numbers
 
+  val REG_ADDR_WIDTH = 5.W
+
   // Destination register address
   val RD_MSB = 11
   val RD_LSB = 7
