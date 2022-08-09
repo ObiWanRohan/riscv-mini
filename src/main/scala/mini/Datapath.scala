@@ -50,6 +50,8 @@ class ExecuteMemoryPipelineRegister(xlen: Int) extends Bundle {
   val alu = UInt(xlen.W)
   val rs2 = UInt(xlen.W)
   val csr_in = UInt(xlen.W)
+
+  val ctrl = new ControlSignals
 }
 
   class MemoryWritebackPipelineRegister(xlen: Int) extends Bundle {
@@ -57,9 +59,7 @@ class ExecuteMemoryPipelineRegister(xlen: Int) extends Bundle {
   val pc = UInt(xlen.W)
   val alu = UInt(xlen.W)  //needed for writeback
   val rs2 = UInt(xlen.W)  // needed for writeback
-  // val csr_in = UInt(xlen.W)
 
-// why do we need this \/ here??
   val ctrl = new ControlSignals
 }
 
@@ -116,8 +116,7 @@ class Datapath(val conf: CoreConfig) extends Module {
     (new MemoryWritebackPipelineRegister(conf.xlen)).Lit(
       _.inst -> Instructions.NOP,
       _.pc -> 0.U,
-      // _.alu -> 0.U,
-      _.csr_in -> 0.U
+      _.alu -> 0.U,
     )
   )
 
@@ -151,12 +150,6 @@ class Datapath(val conf: CoreConfig) extends Module {
       && (
         (de_reg.inst(RD_MSB, RD_LSB) === fd_reg.inst(RS1_MSB, RS1_LSB))
           || (de_reg.inst(RD_MSB, RD_LSB) === fd_reg.inst(RS2_MSB, RS2_LSB))
-      ) // And instruction in decode stage is reading the loaded value
-  ) || (
-    ew_reg.ctrl.ld_type =/= LdType.LD_XXX // Instruction in Writeback stage is a load
-      && (
-        (ew_reg.inst(RD_MSB, RD_LSB) === fd_reg.inst(RS1_MSB, RS1_LSB))
-          || (ew_reg.inst(RD_MSB, RD_LSB) === fd_reg.inst(RS2_MSB, RS2_LSB))
       ) // And instruction in decode stage is reading the loaded value
   )
 
@@ -333,7 +326,6 @@ class Datapath(val conf: CoreConfig) extends Module {
     * *** Execute Stage ***
     */
 
-  val wb_rd_addr = em_reg.inst(RD_MSB, RD_LSB)
 
   val ex_alu_op1 = Wire(UInt(conf.xlen.W))
   val ex_alu_op2 = Wire(UInt(conf.xlen.W))
@@ -406,9 +398,6 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   forwardingUnit.io.em_reg := em_reg
 
-  forwardingUnit.io.wb_rd := wb_rd_addr
-  forwardingUnit.io.wb_en := em_reg.ctrl.wb_en
-  forwardingUnit.io.wb_sel := em_reg.ctrl.wb_sel
 
   // Load
   val loffset = (em_reg.alu(1) << 4.U).asUInt | (em_reg.alu(0) << 3.U).asUInt
@@ -438,9 +427,9 @@ class Datapath(val conf: CoreConfig) extends Module {
   io.host <> csr.io.host
 
   /**
-    * Mem/Writeback stage
-    ---CHANGING TO MEM STAGE---------------------------
+    * Memory stage
     */
+  val wb_rd_addr = mw_reg.inst(RD_MSB, RD_LSB)
 
   // D$ access
   val daddr = Mux(full_stall, em_reg.alu, alu.io.sum) >> 2.U << 2.U
@@ -459,8 +448,10 @@ class Datapath(val conf: CoreConfig) extends Module {
       StType.ST_SB.asUInt -> ("b1".U << alu.io.sum(1, 0))
     )
   )
+  // Abort store when there's an excpetion
+  io.dcache.abort := csr.io.exception
 
-  // add pipeline stage -- ALUOut, Inst, 
+  // add pipeline stage -- ALUOut, Inst, ctrl
  // Pipelining
   when(reset.asBool || !full_stall && csr.io.exception) {
     pc_check := false.B
@@ -471,7 +462,7 @@ class Datapath(val conf: CoreConfig) extends Module {
     mw_reg.inst := em_reg.inst
     mw_reg.ctrl := em_reg.ctrl
     mw_reg.rs2 := em_reg.rs2
-    // mw_reg.alu := alu.io.out //DO NOT NEED ALU OUT IN MEM WB STAGE
+    mw_reg.alu := em_reg.alu
     // em_reg.csr_in := alu.io.out
 
     // illegal := de_reg.ctrl.illegal
@@ -481,25 +472,30 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   }
 
+  /**
+    * Writeback stage
+    */
 
-  // Regfile Write
+  // Regfile Write data
   val regWrite =
     MuxLookup(
-      em_reg.ctrl.wb_sel.asUInt,
-      em_reg.alu.zext,
+      mw_reg.ctrl.wb_sel.asUInt,
+      mw_reg.alu.zext,
       Seq(
         WbSel.WB_MEM.asUInt -> load,
-        WbSel.WB_PC4.asUInt -> (em_reg.pc + 4.U).zext,
+        WbSel.WB_PC4.asUInt -> (mw_reg.pc + 4.U).zext,
         WbSel.WB_CSR.asUInt -> csr.io.out.zext
       )
     ).asUInt
 
-  regFile.io.wen := em_reg.ctrl.wb_en && !full_stall && !csr.io.exception
+  regFile.io.wen := mw_reg.ctrl.wb_en && !full_stall && !csr.io.exception
   regFile.io.waddr := wb_rd_addr
   regFile.io.wdata := regWrite
 
-  // Abort store when there's an excpetion
-  io.dcache.abort := csr.io.exception
+  
+  forwardingUnit.io.wb_rd := wb_rd_addr
+  forwardingUnit.io.wb_en := mw_reg.ctrl.wb_en
+  forwardingUnit.io.wb_sel := mw_reg.ctrl.wb_sel
 
   // TODO: re-enable through AOP
   if (conf.trace) {
