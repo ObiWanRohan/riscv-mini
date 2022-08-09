@@ -9,12 +9,14 @@ nproc      = $(shell nproc --ignore 1)		# Keep 1 core for other tasks
 SBT       = sbt
 SBT_FLAGS = --ivy $(base_dir)/.ivy2
 
+scala_src = $(shell find $(src_dir)/scala -type f -name '*.scala')
+
 sbt:
 	$(SBT) $(SBT_FLAGS)
 
 compile: $(gen_dir)/Tile.v
 
-$(gen_dir)/Tile.v: $(wildcard $(src_dir)/scala/*.scala)
+$(gen_dir)/Tile.v: $(scala_src)
 	$(SBT) $(SBT_FLAGS) "run $(gen_dir)"
 
 CXXFLAGS += -std=c++11 -Wall -Wno-unused-variable
@@ -60,6 +62,9 @@ test:
 # Only runs tests that failed in the previous run
 test-quick:
 	$(SBT) $(SBT_FLAGS) testQuick
+
+test-core-simple:
+	$(SBT) $(SBT_FLAGS) "testOnly mini.CoreSimpleTests"
 
 test-datapath:
 	$(SBT) $(SBT_FLAGS) "testOnly mini.DatapathTests"
