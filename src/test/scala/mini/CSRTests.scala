@@ -93,10 +93,7 @@ class CSRTester(c: => CSR, trace: Boolean = false) extends BasicTester with Test
   // values known statically
   val _csr_addr = insts.map(csr)
   val _rs1_addr = insts.map(rs1)
-  val _csr_ro = _csr_addr.map(x =>
-    ((((x >> 11) & 0x1) > 0x0) && (((x >> 10) & 0x1) > 0x0)) ||
-      x == CSR.mtvec.litValue || x == CSR.mtdeleg.litValue
-  )
+  val _csr_ro = _csr_addr.map(x => ((((x >> 11) & 0x1) > 0x0) && (((x >> 10) & 0x1) > 0x0)))
   val _csr_valid = _csr_addr.map(x => CSR.regs.exists(_.litValue == x))
   // should be <= prv in runtime
   val _prv_level = _csr_addr.map(x => (x >> 8) & 0x3)

@@ -27,6 +27,7 @@ object CSR {
   val instreth = 0xc82.U(12.W)
 
   // Supervisor-level CSR addrs
+  val stvec = 0x105.U(12.W)
   val cyclew = 0x900.U(12.W)
   val timew = 0x901.U(12.W)
   val instretw = 0x902.U(12.W)
@@ -38,22 +39,27 @@ object CSR {
   // Machine Information Registers
   val mcpuid = 0xf00.U(12.W)
   val mimpid = 0xf01.U(12.W)
-  val mhartid = 0xf10.U(12.W)
+  val mhartid = 0xf14.U(12.W)
+
   // Machine Trap Setup
   val mstatus = 0x300.U(12.W)
-  val mtvec = 0x301.U(12.W)
-  val mtdeleg = 0x302.U(12.W)
+  val medeleg = 0x302.U(12.W)
+  val mideleg = 0x303.U(12.W)
   val mie = 0x304.U(12.W)
+  val mtvec = 0x305.U(12.W)
   val mtimecmp = 0x321.U(12.W)
+
   // Machine Timers and Counters
   val mtime = 0x701.U(12.W)
   val mtimeh = 0x741.U(12.W)
+
   // Machine Trap Handling
   val mscratch = 0x340.U(12.W)
   val mepc = 0x341.U(12.W)
   val mcause = 0x342.U(12.W)
   val mbadaddr = 0x343.U(12.W)
   val mip = 0x344.U(12.W)
+
   // Machine HITF
   val mtohost = 0x780.U(12.W)
   val mfromhost = 0x781.U(12.W)
@@ -65,6 +71,7 @@ object CSR {
     cycleh,
     timeh,
     instreth,
+    stvec,
     cyclew,
     timew,
     instretw,
@@ -75,7 +82,8 @@ object CSR {
     mimpid,
     mhartid,
     mtvec,
-    mtdeleg,
+    medeleg,
+    mideleg,
     mie,
     mtimecmp,
     mtime,
@@ -133,6 +141,7 @@ class CSR(val xlen: Int) extends Module {
   val cycleh = RegInit(0.U(xlen.W))
   val instret = RegInit(0.U(xlen.W))
   val instreth = RegInit(0.U(xlen.W))
+  val stvec = RegInit(0.U(xlen.W))
 
   val mcpuid = Cat(
     0.U(2.W) /* RV32I */,
@@ -161,8 +170,9 @@ class CSR(val xlen: Int) extends Module {
   val FS = 0.U(2.W)
   val SD = 0.U(1.W)
   val mstatus = Cat(SD, 0.U((xlen - 23).W), VM, MPRV, XS, FS, PRV3, IE3, PRV2, IE2, PRV1, IE1, PRV, IE)
-  val mtvec = Const.PC_EVEC.U(xlen.W)
-  val mtdeleg = 0x0.U(xlen.W)
+  val mtvec = RegInit(Const.PC_EVEC.U(xlen.W))
+  val medeleg = RegInit(0x0.U(xlen.W))
+  val mideleg = RegInit(0x0.U(xlen.W))
 
   // interrupt registers
   val MTIP = RegInit(false.B)
@@ -202,6 +212,7 @@ class CSR(val xlen: Int) extends Module {
     BitPat(CSR.cycleh) -> cycleh,
     BitPat(CSR.timeh) -> timeh,
     BitPat(CSR.instreth) -> instreth,
+    BitPat(CSR.stvec) -> stvec,
     BitPat(CSR.cyclew) -> cycle,
     BitPat(CSR.timew) -> time,
     BitPat(CSR.instretw) -> instret,
@@ -212,7 +223,8 @@ class CSR(val xlen: Int) extends Module {
     BitPat(CSR.mimpid) -> mimpid,
     BitPat(CSR.mhartid) -> mhartid,
     BitPat(CSR.mtvec) -> mtvec,
-    BitPat(CSR.mtdeleg) -> mtdeleg,
+    BitPat(CSR.medeleg) -> medeleg,
+    BitPat(CSR.mideleg) -> mideleg,
     BitPat(CSR.mie) -> mie,
     BitPat(CSR.mtimecmp) -> mtimecmp,
     BitPat(CSR.mtime) -> time,
@@ -235,7 +247,7 @@ class CSR(val xlen: Int) extends Module {
   val isEbreak = privInst && csr_addr(0) && !csr_addr(8)
   val isEret = privInst && !csr_addr(0) && csr_addr(8)
   val csrValid = csrFile.map(_._1 === csr_addr).reduce(_ || _)
-  val csrRO = csr_addr(11, 10).andR || csr_addr === CSR.mtvec || csr_addr === CSR.mtdeleg
+  val csrRO = csr_addr(11, 10).andR
   val wen = io.cmd === CSR.W || io.cmd(1) && rs1_addr.orR
   val wdata = MuxLookup(
     io.cmd,
