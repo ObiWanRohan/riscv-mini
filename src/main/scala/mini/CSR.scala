@@ -6,6 +6,7 @@ import chisel3._
 import chisel3.util._
 
 import CPUControlSignalTypes._
+import common.RISCVConstants._
 
 object CSR {
   val N = 0.U(3.W)
@@ -19,50 +20,50 @@ object CSR {
   val PRV_M = 0x3.U(2.W)
 
   // User-level CSR addrs
-  val cycle = 0xc00.U(12.W)
-  val time = 0xc01.U(12.W)
-  val instret = 0xc02.U(12.W)
-  val cycleh = 0xc80.U(12.W)
-  val timeh = 0xc81.U(12.W)
-  val instreth = 0xc82.U(12.W)
+  val cycle = 0xc00.U(CSR_ADDR_WIDTH)
+  val time = 0xc01.U(CSR_ADDR_WIDTH)
+  val instret = 0xc02.U(CSR_ADDR_WIDTH)
+  val cycleh = 0xc80.U(CSR_ADDR_WIDTH)
+  val timeh = 0xc81.U(CSR_ADDR_WIDTH)
+  val instreth = 0xc82.U(CSR_ADDR_WIDTH)
 
   // Supervisor-level CSR addrs
-  val stvec = 0x105.U(12.W)
-  val cyclew = 0x900.U(12.W)
-  val timew = 0x901.U(12.W)
-  val instretw = 0x902.U(12.W)
-  val cyclehw = 0x980.U(12.W)
-  val timehw = 0x981.U(12.W)
-  val instrethw = 0x982.U(12.W)
+  val stvec = 0x105.U(CSR_ADDR_WIDTH)
+  val cyclew = 0x900.U(CSR_ADDR_WIDTH)
+  val timew = 0x901.U(CSR_ADDR_WIDTH)
+  val instretw = 0x902.U(CSR_ADDR_WIDTH)
+  val cyclehw = 0x980.U(CSR_ADDR_WIDTH)
+  val timehw = 0x981.U(CSR_ADDR_WIDTH)
+  val instrethw = 0x982.U(CSR_ADDR_WIDTH)
 
   // Machine-level CSR addrs
   // Machine Information Registers
-  val mcpuid = 0xf00.U(12.W)
-  val mimpid = 0xf01.U(12.W)
-  val mhartid = 0xf14.U(12.W)
+  val mcpuid = 0xf00.U(CSR_ADDR_WIDTH)
+  val mimpid = 0xf01.U(CSR_ADDR_WIDTH)
+  val mhartid = 0xf14.U(CSR_ADDR_WIDTH)
 
   // Machine Trap Setup
-  val mstatus = 0x300.U(12.W)
-  val medeleg = 0x302.U(12.W)
-  val mideleg = 0x303.U(12.W)
-  val mie = 0x304.U(12.W)
-  val mtvec = 0x305.U(12.W)
-  val mtimecmp = 0x321.U(12.W)
+  val mstatus = 0x300.U(CSR_ADDR_WIDTH)
+  val medeleg = 0x302.U(CSR_ADDR_WIDTH)
+  val mideleg = 0x303.U(CSR_ADDR_WIDTH)
+  val mie = 0x304.U(CSR_ADDR_WIDTH)
+  val mtvec = 0x305.U(CSR_ADDR_WIDTH)
+  val mtimecmp = 0x321.U(CSR_ADDR_WIDTH)
 
   // Machine Timers and Counters
-  val mtime = 0x701.U(12.W)
-  val mtimeh = 0x741.U(12.W)
+  val mtime = 0x701.U(CSR_ADDR_WIDTH)
+  val mtimeh = 0x741.U(CSR_ADDR_WIDTH)
 
   // Machine Trap Handling
-  val mscratch = 0x340.U(12.W)
-  val mepc = 0x341.U(12.W)
-  val mcause = 0x342.U(12.W)
-  val mbadaddr = 0x343.U(12.W)
-  val mip = 0x344.U(12.W)
+  val mscratch = 0x340.U(CSR_ADDR_WIDTH)
+  val mepc = 0x341.U(CSR_ADDR_WIDTH)
+  val mcause = 0x342.U(CSR_ADDR_WIDTH)
+  val mbadaddr = 0x343.U(CSR_ADDR_WIDTH)
+  val mip = 0x344.U(CSR_ADDR_WIDTH)
 
   // Machine HITF
-  val mtohost = 0x780.U(12.W)
-  val mfromhost = 0x781.U(12.W)
+  val mtohost = 0x780.U(CSR_ADDR_WIDTH)
+  val mfromhost = 0x781.U(CSR_ADDR_WIDTH)
 
   val regs = List(
     cycle,
@@ -131,8 +132,8 @@ class CSRIO(xlen: Int) extends Bundle {
 class CSR(val xlen: Int) extends Module {
   val io = IO(new CSRIO(xlen))
 
-  val csr_addr = io.inst(31, 20)
-  val rs1_addr = io.inst(19, 15)
+  val csr_addr = io.inst(CSR_ADDR_MSB, CSR_ADDR_LSB)
+  val rs1_addr = io.inst(RS1_MSB, RS1_LSB)
 
   // user counters
   val time = RegInit(0.U(xlen.W))

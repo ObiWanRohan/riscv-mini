@@ -19,6 +19,7 @@ object RISCVConstants {
   // CSR Register Address
   val CSR_ADDR_MSB = 31
   val CSR_ADDR_LSB = 20
+  val CSR_ADDR_WIDTH = 12.W
 
   val X0 = 0.U
 
