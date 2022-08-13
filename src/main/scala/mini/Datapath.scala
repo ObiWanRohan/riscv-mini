@@ -30,8 +30,8 @@ class FetchDecodePipelineRegister(xlen: Int) extends Bundle {
 class DecodeExecutePipelineRegister(xlen: Int) extends Bundle {
   val pc = UInt(xlen.W)
   val inst = chiselTypeOf(Instructions.NOP)
-  val op1 = UInt(xlen.W)
-  val op2 = UInt(xlen.W)
+  val opA = UInt(xlen.W)
+  val opB = UInt(xlen.W)
   val rs1 = UInt(xlen.W)
   val rs2 = UInt(xlen.W)
 
@@ -51,14 +51,17 @@ class ExecuteMemoryPipelineRegister(xlen: Int) extends Bundle {
   val rs2 = UInt(xlen.W)
   val csr_in = UInt(xlen.W)
 
+  // val wb_en = ReBool()
+
   val ctrl = new ControlSignals
 }
 
-  class MemoryWritebackPipelineRegister(xlen: Int) extends Bundle {
+class MemoryWritebackPipelineRegister(xlen: Int) extends Bundle {
   val inst = chiselTypeOf(Instructions.NOP)
   val pc = UInt(xlen.W)
-  val alu = UInt(xlen.W)  //needed for writeback
-  val rs2 = UInt(xlen.W)  // needed for writeback
+  val alu = UInt(xlen.W) //needed for writeback
+  val rs2 = UInt(xlen.W) // needed for writeback
+  val dcache_out = UInt(xlen.W) //
 
   val ctrl = new ControlSignals
 }
@@ -93,9 +96,25 @@ class Datapath(val conf: CoreConfig) extends Module {
     (new DecodeExecutePipelineRegister(conf.xlen)).Lit(
       _.inst -> Instructions.NOP,
       _.pc -> 0.U,
-      _.op1 -> 0.U,
-      _.op2 -> 0.U,
-      _.rs2 -> 0.U
+      _.opA -> 0.U,
+      _.opB -> 0.U,
+      _.rs2 -> 0.U,
+      _.ctrl -> (new ControlSignals).Lit(
+        _.pc_sel -> PCSel.PC_4,
+        _.A_sel -> ASel.A_RS1,
+        _.B_sel -> BSel.B_RS2,
+        _.imm_sel -> ImmSel.IMM_X,
+        _.alu_op -> AluSel.ALU_XOR,
+        _.br_type -> BrType.BR_XXX,
+        _.inst_kill -> N.asUInt.asBool,
+        _.pipeline_kill -> N.asUInt.asBool,
+        _.st_type -> StType.ST_XXX,
+        _.ld_type -> LdType.LD_XXX,
+        _.wb_sel -> WbSel.WB_ALU,
+        _.wb_en -> Y.asUInt.asBool,
+        _.csr_cmd -> CSR.N,
+        _.illegal -> N
+      )
     )
   )
 
@@ -106,7 +125,23 @@ class Datapath(val conf: CoreConfig) extends Module {
       _.inst -> Instructions.NOP,
       _.pc -> 0.U,
       _.alu -> 0.U,
-      _.csr_in -> 0.U
+      _.csr_in -> 0.U,
+      _.ctrl -> (new ControlSignals).Lit(
+        _.pc_sel -> PCSel.PC_4,
+        _.A_sel -> ASel.A_RS1,
+        _.B_sel -> BSel.B_RS2,
+        _.imm_sel -> ImmSel.IMM_X,
+        _.alu_op -> AluSel.ALU_XOR,
+        _.br_type -> BrType.BR_XXX,
+        _.inst_kill -> N.asUInt.asBool,
+        _.pipeline_kill -> N.asUInt.asBool,
+        _.st_type -> StType.ST_XXX,
+        _.ld_type -> LdType.LD_XXX,
+        _.wb_sel -> WbSel.WB_ALU,
+        _.wb_en -> Y.asUInt.asBool,
+        _.csr_cmd -> CSR.N,
+        _.illegal -> N
+      )
     )
   )
 
@@ -117,6 +152,24 @@ class Datapath(val conf: CoreConfig) extends Module {
       _.inst -> Instructions.NOP,
       _.pc -> 0.U,
       _.alu -> 0.U,
+      _.rs2 -> 0.U,
+      _.dcache_out -> 0.U,
+      _.ctrl -> (new ControlSignals).Lit(
+        _.pc_sel -> PCSel.PC_4,
+        _.A_sel -> ASel.A_RS1,
+        _.B_sel -> BSel.B_RS2,
+        _.imm_sel -> ImmSel.IMM_X,
+        _.alu_op -> AluSel.ALU_XOR,
+        _.br_type -> BrType.BR_XXX,
+        _.inst_kill -> N.asUInt.asBool,
+        _.pipeline_kill -> N.asUInt.asBool,
+        _.st_type -> StType.ST_XXX,
+        _.ld_type -> LdType.LD_XXX,
+        _.wb_sel -> WbSel.WB_ALU,
+        _.wb_en -> Y.asUInt.asBool,
+        _.csr_cmd -> CSR.N,
+        _.illegal -> N
+      )
     )
   )
 
@@ -130,6 +183,13 @@ class Datapath(val conf: CoreConfig) extends Module {
   // val csr_cmd = Reg(io.ctrl.csr_cmd.cloneType)
   val illegal = Reg(Bool())
   val pc_check = Reg(Bool())
+
+  /**
+    * *** Wires for writeback and load muxes ***
+    */
+
+  val regWrite = Wire(UInt(conf.xlen.W))
+  val load = Wire(SInt(conf.xlen.W))
 
   /**
     * *** Fetch Stage ***
@@ -192,11 +252,11 @@ class Datapath(val conf: CoreConfig) extends Module {
   // Only update the instruction when not stalling
   when(!full_stall && !dec_stall) {
     fd_reg.pc := pc
-    when(if_kill){
+    when(if_kill) {
       fd_reg.inst := Instructions.NOP
-      }.otherwise {
-        fd_reg.inst := inst
-      }
+    }.otherwise {
+      fd_reg.inst := inst
+    }
   }
 
   forwardingUnit.io.fd_reg := fd_reg
@@ -230,8 +290,10 @@ class Datapath(val conf: CoreConfig) extends Module {
   rs1 := MuxCase(
     regFile.io.rdata1,
     IndexedSeq(
-      // Forward from EX/WB stage register
-      (forwardingUnit.io.forward_dec_opA === ForwardDecOperand.FWD_EW) -> em_reg.alu,
+      // Forward from MEM/WB stage register
+      (forwardingUnit.io.forward_dec_opA === ForwardDecOperand.FWD_MW) -> regWrite,
+      // Forward from EX/MEM stage register
+      (forwardingUnit.io.forward_dec_opA === ForwardDecOperand.FWD_EM) -> em_reg.alu,
       // No forwarding
       (forwardingUnit.io.forward_dec_opA === ForwardDecOperand.FWD_NONE) -> regFile.io.rdata1
     )
@@ -239,8 +301,10 @@ class Datapath(val conf: CoreConfig) extends Module {
   rs2 := MuxCase(
     regFile.io.rdata2,
     IndexedSeq(
-      // Forward from EX/WB stage register
-      (forwardingUnit.io.forward_dec_opB === ForwardDecOperand.FWD_EW) -> em_reg.alu,
+      // Forward from MEM/WB stage register
+      (forwardingUnit.io.forward_dec_opB === ForwardDecOperand.FWD_MW) -> regWrite,
+      // Forward from EX/MEM stage register
+      (forwardingUnit.io.forward_dec_opB === ForwardDecOperand.FWD_EM) -> em_reg.alu,
       // No forwarding
       (forwardingUnit.io.forward_dec_opB === ForwardDecOperand.FWD_NONE) -> regFile.io.rdata2
     )
@@ -267,7 +331,7 @@ class Datapath(val conf: CoreConfig) extends Module {
       de_reg.immOut := immGen.io.out
 
       // Mux to bypass register from writeback stage
-      de_reg.op1 := MuxCase(
+      de_reg.opA := MuxCase(
         rs1,
         IndexedSeq(
           (io.ctrl.A_sel === ASel.A_RS1) -> rs1,
@@ -275,7 +339,7 @@ class Datapath(val conf: CoreConfig) extends Module {
         )
       )
 
-      de_reg.op2 := MuxCase(
+      de_reg.opB := MuxCase(
         rs2,
         IndexedSeq(
           (io.ctrl.B_sel === BSel.B_RS2) -> rs2,
@@ -311,8 +375,8 @@ class Datapath(val conf: CoreConfig) extends Module {
       de_reg.rs1 := 0.U
       de_reg.rs2 := 0.U
       de_reg.immOut := 0.U
-      de_reg.op1 := 0.U
-      de_reg.op2 := 0.U
+      de_reg.opA := 0.U
+      de_reg.opB := 0.U
 
     }
   }
@@ -326,30 +390,38 @@ class Datapath(val conf: CoreConfig) extends Module {
     * *** Execute Stage ***
     */
 
-
-  val ex_alu_op1 = Wire(UInt(conf.xlen.W))
-  val ex_alu_op2 = Wire(UInt(conf.xlen.W))
+  val ex_alu_opA = Wire(UInt(conf.xlen.W))
+  val ex_alu_opB = Wire(UInt(conf.xlen.W))
   val ex_rs1 = Wire(UInt(conf.xlen.W))
   val ex_rs2 = Wire(UInt(conf.xlen.W))
 
-  ex_alu_op1 := MuxCase(
-    de_reg.op1,
+  ex_alu_opA := MuxLookup(
+    forwardingUnit.io.forward_exe_opA.asUInt,
+    de_reg.opA,
     IndexedSeq(
-      (forwardingUnit.io.forward_exe_opA === ForwardExeOperand.FWD_EM) -> em_reg.alu,
-      (forwardingUnit.io.forward_exe_opA === ForwardExeOperand.FWD_NONE) -> de_reg.op1
+      // This should be the highest priority since it has the latest result
+      ForwardExeOperand.FWD_EM.asUInt -> em_reg.alu,
+      // Forward from MEM/WB stage register
+      ForwardExeOperand.FWD_MW.asUInt -> regWrite,
+      ForwardExeOperand.FWD_NONE.asUInt -> de_reg.opA
     )
   )
-  ex_alu_op2 := MuxCase(
-    de_reg.op2,
+  ex_alu_opB := MuxLookup(
+    forwardingUnit.io.forward_exe_opB.asUInt,
+    de_reg.opB,
     IndexedSeq(
-      (forwardingUnit.io.forward_exe_opB === ForwardExeOperand.FWD_EM) -> em_reg.alu,
-      (forwardingUnit.io.forward_exe_opB === ForwardExeOperand.FWD_NONE) -> de_reg.op2
+      // Forward from MEM/WB stage register
+      ForwardExeOperand.FWD_EM.asUInt -> em_reg.alu,
+      ForwardExeOperand.FWD_MW.asUInt -> regWrite,
+      ForwardExeOperand.FWD_NONE.asUInt -> de_reg.opB
     )
   )
 
   ex_rs1 := MuxCase(
     de_reg.rs1,
     IndexedSeq(
+      // Forward from MEM/WB stage register
+      (forwardingUnit.io.forward_exe_rs1 === ForwardExeOperand.FWD_MW) -> regWrite,
       (forwardingUnit.io.forward_exe_rs1 === ForwardExeOperand.FWD_EM) -> em_reg.alu,
       (forwardingUnit.io.forward_exe_rs1 === ForwardExeOperand.FWD_NONE) -> de_reg.rs1
     )
@@ -358,14 +430,16 @@ class Datapath(val conf: CoreConfig) extends Module {
   ex_rs2 := MuxCase(
     de_reg.rs2,
     IndexedSeq(
+      // Forward from MEM/WB stage register
+      (forwardingUnit.io.forward_exe_rs2 === ForwardExeOperand.FWD_MW) -> regWrite,
       (forwardingUnit.io.forward_exe_rs2 === ForwardExeOperand.FWD_EM) -> em_reg.alu,
       (forwardingUnit.io.forward_exe_rs2 === ForwardExeOperand.FWD_NONE) -> de_reg.rs2
     )
   )
 
   // ALU operations
-  alu.io.A := ex_alu_op1
-  alu.io.B := ex_alu_op2
+  alu.io.A := ex_alu_opA
+  alu.io.B := ex_alu_opB
 
   alu.io.alu_op := de_reg.ctrl.alu_op
 
@@ -389,7 +463,7 @@ class Datapath(val conf: CoreConfig) extends Module {
 
     illegal := de_reg.ctrl.illegal
 
-    // ew_reg.csr_in := Mux(de_reg.ctrl.imm_sel === ImmSel.IMM_Z, de_reg.immOut, de_reg.op1)
+    // ew_reg.csr_in := Mux(de_reg.ctrl.imm_sel === ImmSel.IMM_Z, de_reg.immOut, de_reg.opA)
     em_reg.csr_in := alu.io.out
 
     // Might need to convert this to a wire and make it a MuxLookup
@@ -398,11 +472,14 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   forwardingUnit.io.em_reg := em_reg
 
+  /**
+    * Memory stage
+    */
 
   // Load
   val loffset = (em_reg.alu(1) << 4.U).asUInt | (em_reg.alu(0) << 3.U).asUInt
   val lshift = io.dcache.resp.bits.data >> loffset
-  val load = MuxLookup(
+  load := MuxLookup(
     em_reg.ctrl.ld_type.asUInt,
     io.dcache.resp.bits.data.zext,
     Seq(
@@ -426,9 +503,6 @@ class Datapath(val conf: CoreConfig) extends Module {
   csr.io.st_type := em_reg.ctrl.st_type
   io.host <> csr.io.host
 
-  /**
-    * Memory stage
-    */
   val wb_rd_addr = mw_reg.inst(RD_MSB, RD_LSB)
 
   // D$ access
@@ -451,8 +525,10 @@ class Datapath(val conf: CoreConfig) extends Module {
   // Abort store when there's an excpetion
   io.dcache.abort := csr.io.exception
 
+  forwardingUnit.io.mw_reg := mw_reg
+
   // add pipeline stage -- ALUOut, Inst, ctrl
- // Pipelining
+  // Pipelining
   when(reset.asBool || !full_stall && csr.io.exception) {
     pc_check := false.B
     illegal := false.B
@@ -477,22 +553,20 @@ class Datapath(val conf: CoreConfig) extends Module {
     */
 
   // Regfile Write data
-  val regWrite =
-    MuxLookup(
-      mw_reg.ctrl.wb_sel.asUInt,
-      mw_reg.alu.zext,
-      Seq(
-        WbSel.WB_MEM.asUInt -> load,
-        WbSel.WB_PC4.asUInt -> (mw_reg.pc + 4.U).zext,
-        WbSel.WB_CSR.asUInt -> csr.io.out.zext
-      )
-    ).asUInt
+  regWrite := MuxLookup(
+    mw_reg.ctrl.wb_sel.asUInt,
+    mw_reg.alu.zext,
+    Seq(
+      WbSel.WB_MEM.asUInt -> load,
+      WbSel.WB_PC4.asUInt -> (mw_reg.pc + 4.U).zext,
+      WbSel.WB_CSR.asUInt -> csr.io.out.zext
+    )
+  ).asUInt
 
   regFile.io.wen := mw_reg.ctrl.wb_en && !full_stall && !csr.io.exception
   regFile.io.waddr := wb_rd_addr
   regFile.io.wdata := regWrite
 
-  
   forwardingUnit.io.wb_rd := wb_rd_addr
   forwardingUnit.io.wb_en := mw_reg.ctrl.wb_en
   forwardingUnit.io.wb_sel := mw_reg.ctrl.wb_sel
@@ -500,15 +574,15 @@ class Datapath(val conf: CoreConfig) extends Module {
   // TODO: re-enable through AOP
   if (conf.trace) {
     printf(
-      "pc=[%x] W[r%d=%x][%d] Op1=[r%d][%x] Op2=[r%d][%x] inst=[%x] %c%c%c DASM(%x)\n",
+      "pc=[%x] W[r%d=%x][%d] OpA=[r%d][%x] OpB=[r%d][%x] inst=[%x] %c%c%c DASM(%x)\n",
       em_reg.pc,
       wb_rd_addr,
       regWrite,
       em_reg.ctrl.wb_en && !full_stall && !csr.io.exception,
       em_reg.inst(RS1_MSB, RS1_LSB), // RS1 address
-      RegNext(de_reg.op1),
+      RegNext(de_reg.opA),
       em_reg.inst(RS2_MSB, RS2_LSB), // RS2 address
-      RegNext(de_reg.op2),
+      RegNext(de_reg.opB),
       em_reg.inst,
       Mux(io.ctrl.inst_kill, Str("K"), Str(" ")),
       MuxLookup(
