@@ -292,7 +292,13 @@ class CSRTester(c: => CSR, trace: Boolean = false) extends BasicTester with Test
 }
 
 class CSRTests extends AnyFlatSpec with ChiselScalatestTester {
+  val trace = true
+  val annotations = Seq(VerilatorBackendAnnotation, WriteVcdAnnotation)
   "CSR" should "pass" in {
-    test(new CSRTester(new CSR(xlen = 32))).runUntilStop()
+    if (trace) {
+      test(new CSRTester(new CSR(xlen = 32), true)).withAnnotations(annotations).runUntilStop()
+    } else {
+      test(new CSRTester(new CSR(xlen = 32))).runUntilStop()
+    }
   }
 }
