@@ -28,7 +28,12 @@ object ForwardExeOperand extends ChiselEnum {
 
 class ForwardingUnitIO(width: Int) extends Bundle {
 
-  import mini.{DecodeExecutePipelineRegister, ExecuteMemoryPipelineRegister, MemoryWritebackPipelineRegister, FetchDecodePipelineRegister}
+  import mini.{
+    DecodeExecutePipelineRegister,
+    ExecuteMemoryPipelineRegister,
+    FetchDecodePipelineRegister,
+    MemoryWritebackPipelineRegister
+  }
   import CPUControlSignalTypes._
 
   /* Inputs from pipeline registers
@@ -144,7 +149,7 @@ class ForwardingUnit(width: Int) extends Module {
         io.em_reg.inst(RD_MSB, RD_LSB) === exe_rs2_addr   //dest reg is being read - could be from rs1 or rs2
         && exe_rs2_addr.orR
         && io.em_reg.ctrl.wb_en   // writeback is enabled
-        && io.em_reg.ctrl.wb_sel === WbSel.WB_ALU   // we are writing back from memory (load)
+        && io.em_reg.ctrl.wb_sel === WbSel.WB_ALU   // we are writing back from memory stage (load)
         && io.de_reg.ctrl.B_sel === BSel.B_RS2
         ) -> ForwardExeOperand.FWD_EM,
       (
@@ -158,7 +163,7 @@ class ForwardingUnit(width: Int) extends Module {
 
   io.forward_exe_rs1 := MuxCase(
     ForwardExeOperand.FWD_NONE,
-    IndexedSeq(B_sel
+    IndexedSeq(
       (
         io.em_reg.inst(RD_MSB, RD_LSB) === exe_rs1_addr   //dest reg is being read - could be from rs1 or rs2
         && exe_rs1_addr.orR

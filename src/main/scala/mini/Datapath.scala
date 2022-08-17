@@ -61,7 +61,7 @@ class MemoryWritebackPipelineRegister(xlen: Int) extends Bundle {
   val pc = UInt(xlen.W)
   val alu = UInt(xlen.W) //needed for writeback
   val rs2 = UInt(xlen.W) // needed for writeback
-  val dcache_out = UInt(xlen.W) //
+  val dcache_out = SInt(xlen.W) //
 
   val ctrl = new ControlSignals
 }
@@ -153,7 +153,7 @@ class Datapath(val conf: CoreConfig) extends Module {
       _.pc -> 0.U,
       _.alu -> 0.U,
       _.rs2 -> 0.U,
-      _.dcache_out -> 0.U,
+      _.dcache_out -> 0.S,
       _.ctrl -> (new ControlSignals).Lit(
         _.pc_sel -> PCSel.PC_4,
         _.A_sel -> ASel.A_RS1,
@@ -539,6 +539,7 @@ class Datapath(val conf: CoreConfig) extends Module {
     mw_reg.ctrl := em_reg.ctrl
     mw_reg.rs2 := em_reg.rs2
     mw_reg.alu := em_reg.alu
+    mw_reg.dcache_out := load
     // em_reg.csr_in := alu.io.out
 
     // illegal := de_reg.ctrl.illegal
@@ -557,7 +558,7 @@ class Datapath(val conf: CoreConfig) extends Module {
     mw_reg.ctrl.wb_sel.asUInt,
     mw_reg.alu.zext,
     Seq(
-      WbSel.WB_MEM.asUInt -> load,
+      WbSel.WB_MEM.asUInt -> mw_reg.dcache_out,
       WbSel.WB_PC4.asUInt -> (mw_reg.pc + 4.U).zext,
       WbSel.WB_CSR.asUInt -> csr.io.out.zext
     )
