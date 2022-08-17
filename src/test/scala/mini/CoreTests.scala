@@ -65,7 +65,9 @@ object DefaultCoreConfig {
 class CoreSimpleTests extends AnyFlatSpec with ChiselScalatestTester {
   behavior.of("Core")
   it should "execute a simple test" in {
-    test(new CoreTester(new Core(DefaultCoreConfig()), "rv32ui-p-simple")).runUntilStop(100)
+    test(new CoreTester(new Core(DefaultCoreConfig()), "rv32ui-p-simple"))
+      .withAnnotations(Seq(VerilatorBackendAnnotation, WriteVcdAnnotation))
+      .runUntilStop(500)
   }
 }
 
