@@ -61,6 +61,28 @@ object CSR {
   val mbadaddr = 0x343.U(CSR_ADDR_WIDTH)
   val mip = 0x344.U(CSR_ADDR_WIDTH)
 
+  // Machine Memory Protection
+  val pmpcfg0 = 0x3a0.U(CSR_ADDR_WIDTH)
+  val pmpcfg1 = 0x3a1.U(CSR_ADDR_WIDTH)
+  val pmpcfg2 = 0x3a2.U(CSR_ADDR_WIDTH)
+  val pmpcfg3 = 0x3a3.U(CSR_ADDR_WIDTH)
+  val pmpaddr0 = 0x3b0.U(CSR_ADDR_WIDTH)
+  val pmpaddr1 = 0x3b1.U(CSR_ADDR_WIDTH)
+  val pmpaddr2 = 0x3b2.U(CSR_ADDR_WIDTH)
+  val pmpaddr3 = 0x3b3.U(CSR_ADDR_WIDTH)
+  val pmpaddr4 = 0x3b4.U(CSR_ADDR_WIDTH)
+  val pmpaddr5 = 0x3b5.U(CSR_ADDR_WIDTH)
+  val pmpaddr6 = 0x3b6.U(CSR_ADDR_WIDTH)
+  val pmpaddr7 = 0x3b7.U(CSR_ADDR_WIDTH)
+  val pmpaddr8 = 0x3b8.U(CSR_ADDR_WIDTH)
+  val pmpaddr9 = 0x3b9.U(CSR_ADDR_WIDTH)
+  val pmpaddr10 = 0x3ba.U(CSR_ADDR_WIDTH)
+  val pmpaddr11 = 0x3bb.U(CSR_ADDR_WIDTH)
+  val pmpaddr12 = 0x3bc.U(CSR_ADDR_WIDTH)
+  val pmpaddr13 = 0x3bd.U(CSR_ADDR_WIDTH)
+  val pmpaddr14 = 0x3be.U(CSR_ADDR_WIDTH)
+  val pmpaddr15 = 0x3bf.U(CSR_ADDR_WIDTH)
+
   // Machine HITF
   val mtohost = 0x780.U(CSR_ADDR_WIDTH)
   val mfromhost = 0x781.U(CSR_ADDR_WIDTH)
@@ -130,6 +152,7 @@ class CSRIO(xlen: Int) extends Bundle {
 }
 
 class CSR(val xlen: Int) extends Module {
+
   val io = IO(new CSRIO(xlen))
 
   val csr_addr = io.inst(CSR_ADDR_MSB, CSR_ADDR_LSB)
@@ -174,6 +197,28 @@ class CSR(val xlen: Int) extends Module {
   val mtvec = RegInit(Const.PC_EVEC.U(xlen.W))
   val medeleg = RegInit(0x0.U(xlen.W))
   val mideleg = RegInit(0x0.U(xlen.W))
+
+  // Memory Protection
+  val pmpcfg0 = 0x0.U(8.W)
+  val pmpcfg1 = 0x0.U(8.W)
+  val pmpcfg2 = 0x0.U(8.W)
+  val pmpcfg3 = 0x0.U(8.W)
+  val pmpaddr0 = 0x0.U(8.W)
+  val pmpaddr1 = 0x0.U(8.W)
+  val pmpaddr2 = 0x0.U(8.W)
+  val pmpaddr3 = 0x0.U(8.W)
+  val pmpaddr4 = 0x0.U(8.W)
+  val pmpaddr5 = 0x0.U(8.W)
+  val pmpaddr6 = 0x0.U(8.W)
+  val pmpaddr7 = 0x0.U(8.W)
+  val pmpaddr8 = 0x0.U(8.W)
+  val pmpaddr9 = 0x0.U(8.W)
+  val pmpaddr10 = 0x0.U(8.W)
+  val pmpaddr11 = 0x0.U(8.W)
+  val pmpaddr12 = 0x0.U(8.W)
+  val pmpaddr13 = 0x0.U(8.W)
+  val pmpaddr14 = 0x0.U(8.W)
+  val pmpaddr15 = 0x0.U(8.W)
 
   // interrupt registers
   val MTIP = RegInit(false.B)
@@ -237,7 +282,27 @@ class CSR(val xlen: Int) extends Module {
     BitPat(CSR.mip) -> mip,
     BitPat(CSR.mtohost) -> mtohost,
     BitPat(CSR.mfromhost) -> mfromhost,
-    BitPat(CSR.mstatus) -> mstatus
+    BitPat(CSR.mstatus) -> mstatus,
+    BitPat(CSR.pmpcfg0) -> pmpcfg0,
+    BitPat(CSR.pmpcfg1) -> pmpcfg1,
+    BitPat(CSR.pmpcfg2) -> pmpcfg2,
+    BitPat(CSR.pmpcfg3) -> pmpcfg3,
+    BitPat(CSR.pmpaddr0) -> pmpaddr0,
+    BitPat(CSR.pmpaddr1) -> pmpaddr1,
+    BitPat(CSR.pmpaddr2) -> pmpaddr2,
+    BitPat(CSR.pmpaddr3) -> pmpaddr3,
+    BitPat(CSR.pmpaddr4) -> pmpaddr4,
+    BitPat(CSR.pmpaddr5) -> pmpaddr5,
+    BitPat(CSR.pmpaddr6) -> pmpaddr6,
+    BitPat(CSR.pmpaddr7) -> pmpaddr7,
+    BitPat(CSR.pmpaddr8) -> pmpaddr8,
+    BitPat(CSR.pmpaddr9) -> pmpaddr9,
+    BitPat(CSR.pmpaddr10) -> pmpaddr10,
+    BitPat(CSR.pmpaddr11) -> pmpaddr11,
+    BitPat(CSR.pmpaddr12) -> pmpaddr12,
+    BitPat(CSR.pmpaddr13) -> pmpaddr13,
+    BitPat(CSR.pmpaddr14) -> pmpaddr14,
+    BitPat(CSR.pmpaddr15) -> pmpaddr15
   )
 
   io.out := Lookup(csr_addr, 0.U, csrFile).asUInt
