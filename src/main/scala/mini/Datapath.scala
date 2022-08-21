@@ -364,9 +364,31 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   // Pipelining
 
-  when(reset.asBool || !full_stall && csr.io.exception) {
+  when(reset.asBool || (!full_stall && csr.io.exception)) {
     pc_check := false.B
     illegal := false.B
+
+    ew_reg.pc := 0.U
+    ew_reg.inst := Instructions.NOP
+    ew_reg.ctrl := (new ControlSignals).Lit(
+      _.pc_sel -> PCSel.PC_4,
+      _.A_sel -> ASel.A_RS1,
+      _.B_sel -> BSel.B_RS2,
+      _.imm_sel -> ImmSel.IMM_X,
+      _.alu_op -> AluSel.ALU_XOR,
+      _.br_type -> BrType.BR_XXX,
+      _.inst_kill -> N.asUInt.asBool,
+      _.pipeline_kill -> N.asUInt.asBool,
+      _.st_type -> StType.ST_XXX,
+      _.ld_type -> LdType.LD_XXX,
+      _.wb_sel -> WbSel.WB_ALU,
+      _.wb_en -> Y.asUInt.asBool,
+      _.csr_cmd -> CSR.N,
+      _.illegal -> N
+    )
+    ew_reg.rs2 := 0.U
+    ew_reg.alu := 0.U
+    ew_reg.csr_in := 0.U
 
   }.elsewhen(!full_stall && !csr.io.exception) {
     ew_reg.pc := de_reg.pc
