@@ -23,6 +23,13 @@ object RISCVConstants {
 
   val X0 = 0.U
 
+  // Counters
+  val COUNTER_WIDTH = 64
+  val COUNTER_LOW_LSB = 0
+  val COUNTER_LOW_MSB = 31
+  val COUNTER_HIGH_LSB = 32
+  val COUNTER_HIGH_MSB = 63
+
   // The Bubble Instruction (Machine generated NOP)
   // Insert (XOR x0,x0,x0) which is different from software compiler
   // generated NOPs which are (ADDI x0, x0, 0).
