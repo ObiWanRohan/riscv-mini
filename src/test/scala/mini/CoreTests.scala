@@ -18,7 +18,7 @@ class CoreTester(core: => Core, benchmark: String, trace: Boolean = false) exten
   dut.io.host.fromhost.bits := DontCare
   dut.io.host.fromhost.valid := false.B
 
-  val imem = Mem(1 << 20, UInt(xlen.W))  // 8MiB
+  val imem = Mem(1 << 20, UInt(xlen.W)) // 8MiB
   loadMemoryFromFileInline(imem, resizedHexFile.toString())
   val dmem = Mem(1 << 20, UInt(xlen.W)) // 8MiB
   loadMemoryFromFileInline(dmem, resizedHexFile.toString())
@@ -65,7 +65,9 @@ object DefaultCoreConfig {
 class CoreSimpleTests extends AnyFlatSpec with ChiselScalatestTester {
   behavior.of("Core")
   it should "execute a simple test" in {
-    test(new CoreTester(new Core(DefaultCoreConfig()), "rv32ui-p-simple")).withAnnotations(Seq(VerilatorBackendAnnotation, WriteVcdAnnotation)).runUntilStop(100)
+    test(new CoreTester(new Core(DefaultCoreConfig()), "rv32ui-p-simple"))
+      .withAnnotations(Seq(VerilatorBackendAnnotation, WriteVcdAnnotation))
+      .runUntilStop(100)
   }
 }
 
