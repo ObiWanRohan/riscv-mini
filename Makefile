@@ -69,6 +69,9 @@ test-core-simple:
 test-datapath:
 	$(SBT) $(SBT_FLAGS) "testOnly mini.DatapathTests"
 
+test-core-simple:
+	$(SBT) $(SBT_FLAGS) "testOnly mini.CoreSimpleTests"
+
 test-isa:
 	$(SBT) $(SBT_FLAGS) "testOnly mini.CoreISATests"
 
