@@ -134,7 +134,7 @@ class ForwardingUnit(width: Int) extends Module {
         io.wb_rd === exe_rs1_addr     // The destination register is the same that is being read
         && exe_rs1_addr.orR          // The destination register is not register x0
         && io.wb_en                   // Writeback is enabled
-        && io.em_reg.ctrl.A_sel === ASel.A_RS1
+        && io.de_reg.ctrl.A_sel === ASel.A_RS1
       ) -> ForwardExeOperand.FWD_MW
     )
 
