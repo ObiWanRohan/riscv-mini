@@ -18,9 +18,9 @@ class CoreTester(core: => Core, benchmark: String, trace: Boolean = false) exten
   dut.io.host.fromhost.bits := DontCare
   dut.io.host.fromhost.valid := false.B
 
-  val imem = Mem(1 << 20, UInt(xlen.W))
+  val imem = Mem(1 << 20, UInt(xlen.W)) // 8MiB
   loadMemoryFromFileInline(imem, resizedHexFile.toString())
-  val dmem = Mem(1 << 20, UInt(xlen.W))
+  val dmem = Mem(1 << 20, UInt(xlen.W)) // 8MiB
   loadMemoryFromFileInline(dmem, resizedHexFile.toString())
 
   val cycle = RegInit(0.U(32.W))
@@ -65,7 +65,9 @@ object DefaultCoreConfig {
 class CoreSimpleTests extends AnyFlatSpec with ChiselScalatestTester {
   behavior.of("Core")
   it should "execute a simple test" in {
-    test(new CoreTester(new Core(DefaultCoreConfig()), "rv32ui-p-simple")).runUntilStop(100)
+    test(new CoreTester(new Core(DefaultCoreConfig()), "rv32ui-p-simple"))
+      .withAnnotations(Seq(VerilatorBackendAnnotation, WriteVcdAnnotation))
+      .runUntilStop(100)
   }
 }
 
@@ -73,7 +75,7 @@ abstract class CoreTests(cfg: TestConfig, useVerilator: Boolean = false)
     extends AnyFlatSpec
     with ChiselScalatestTester {
   behavior.of("Core")
-  val opts = if (useVerilator) Seq(VerilatorBackendAnnotation) else Seq()
+  val opts = if (useVerilator) Seq(VerilatorBackendAnnotation, WriteVcdAnnotation) else Seq()
   cfg.tests.foreach { name =>
     it should s"execute $name" taggedAs IntegrationTest in {
       test(new CoreTester(new Core(DefaultCoreConfig()), name)).withAnnotations(opts).runUntilStop(cfg.maxcycles)

@@ -35,3 +35,4 @@ ucli.key
 
 #gtkwave config files
 *.gtkw
+VCDumps
