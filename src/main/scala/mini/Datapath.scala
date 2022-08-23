@@ -59,7 +59,7 @@ class ExecuteMemoryPipelineRegister(xlen: Int) extends Bundle {
 class MemoryWritebackPipelineRegister(xlen: Int) extends Bundle {
   val inst = chiselTypeOf(Instructions.NOP)
   val pc = UInt(xlen.W)
-  val alu = UInt(xlen.W) //needed for writeback
+  val wb_data = UInt(xlen.W) //needed for writeback
   val rs2 = UInt(xlen.W) // needed for writeback
   val dcache_out = SInt(xlen.W) //
 
@@ -151,7 +151,7 @@ class Datapath(val conf: CoreConfig) extends Module {
     (new MemoryWritebackPipelineRegister(conf.xlen)).Lit(
       _.inst -> Instructions.NOP,
       _.pc -> 0.U,
-      _.alu -> 0.U,
+      _.wb_data -> 0.U,
       _.rs2 -> 0.U,
       _.dcache_out -> 0.S,
       _.ctrl -> (new ControlSignals).Lit(
@@ -218,20 +218,32 @@ class Datapath(val conf: CoreConfig) extends Module {
   // and a NOP will be inserted instead
   val if_kill = (
     (de_reg.ctrl.pc_sel =/= PCSel.PC_4)
-    // || cs_fencei || RegNext(cs_fencei) // Will add later
-  )
+  ) || (
+    csr.io.exception
+  ) || (
+    brCond.io.taken
+  ) // || cs_fencei || RegNext(cs_fencei) // Will add later
+
   // Kill Decode stage
   // This means the instruction in the decode stage will not pass to the execute stage
   // and a NOP will be inserted instead
-  val dec_kill = (de_reg.ctrl.pc_sel =/= PCSel.PC_4) || illegal
+  val dec_kill = (
+    de_reg.ctrl.pc_sel =/= PCSel.PC_4
+  ) || (
+    csr.io.exception
+  ) || (
+    illegal
+  ) || (
+    brCond.io.taken
+  )
 
   val pc = RegInit(Const.PC_START.U(conf.xlen.W) - 4.U(conf.xlen.W))
   // Next Program Counter
   val next_pc = MuxCase(
     pc + 4.U,
     IndexedSeq(
-      (full_stall || dec_stall) -> pc,
       csr.io.exception -> csr.io.evec,
+      (full_stall || dec_stall) -> pc,
       (de_reg.ctrl.pc_sel === PCSel.PC_EPC) -> csr.io.epc,
       ((de_reg.ctrl.pc_sel === PCSel.PC_ALU) || (brCond.io.taken)) -> (alu.io.sum >> 1.U << 1.U),
       (de_reg.ctrl.pc_sel === PCSel.PC_0) -> pc
@@ -455,8 +467,10 @@ class Datapath(val conf: CoreConfig) extends Module {
   brCond.io.br_type := de_reg.ctrl.br_type
 
   // Pipelining
+  // Kill instruction in execute
+  val execute_kill = csr.io.exception
 
-  when(reset.asBool || (!full_stall && csr.io.exception)) {
+  when(reset.asBool || (!full_stall && execute_kill)) {
     pc_check := false.B
     illegal := false.B
 
@@ -482,7 +496,7 @@ class Datapath(val conf: CoreConfig) extends Module {
     em_reg.alu := 0.U
     em_reg.csr_in := 0.U
 
-  }.elsewhen(!full_stall && !csr.io.exception) {
+  }.elsewhen(!full_stall && !execute_kill) {
     em_reg.pc := de_reg.pc
     em_reg.inst := de_reg.inst
     em_reg.ctrl := de_reg.ctrl
@@ -555,6 +569,17 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   forwardingUnit.io.mw_reg := mw_reg
 
+  // Regfile Write data
+  regWrite := MuxLookup(
+    em_reg.ctrl.wb_sel.asUInt,
+    em_reg.alu.zext,
+    Seq(
+      WbSel.WB_MEM.asUInt -> load,
+      WbSel.WB_PC4.asUInt -> (em_reg.pc + 4.U).zext,
+      WbSel.WB_CSR.asUInt -> csr.io.out.zext
+    )
+  ).asUInt
+
   // add pipeline stage -- ALUOut, Inst, ctrl
   // Pipelining
   when(reset.asBool || !full_stall && csr.io.exception) {
@@ -566,7 +591,9 @@ class Datapath(val conf: CoreConfig) extends Module {
     mw_reg.inst := em_reg.inst
     mw_reg.ctrl := em_reg.ctrl
     mw_reg.rs2 := em_reg.rs2
-    mw_reg.alu := em_reg.alu
+
+    mw_reg.wb_data := regWrite
+
     mw_reg.dcache_out := load
     // em_reg.csr_in := alu.io.out
 
@@ -581,20 +608,9 @@ class Datapath(val conf: CoreConfig) extends Module {
     * Writeback stage
     */
 
-  // Regfile Write data
-  regWrite := MuxLookup(
-    mw_reg.ctrl.wb_sel.asUInt,
-    mw_reg.alu.zext,
-    Seq(
-      WbSel.WB_MEM.asUInt -> mw_reg.dcache_out,
-      WbSel.WB_PC4.asUInt -> (mw_reg.pc + 4.U).zext,
-      WbSel.WB_CSR.asUInt -> csr.io.out.zext
-    )
-  ).asUInt
-
   regFile.io.wen := mw_reg.ctrl.wb_en && !full_stall && !csr.io.exception
   regFile.io.waddr := wb_rd_addr
-  regFile.io.wdata := regWrite
+  regFile.io.wdata := mw_reg.wb_data
 
   forwardingUnit.io.wb_rd := wb_rd_addr
   forwardingUnit.io.wb_en := mw_reg.ctrl.wb_en
