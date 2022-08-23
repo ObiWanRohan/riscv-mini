@@ -417,23 +417,29 @@ class Datapath(val conf: CoreConfig) extends Module {
     )
   )
 
-  ex_rs1 := MuxCase(
+  ex_rs1 := MuxLookup(
+    forwardingUnit.io.forward_exe_rs1.asUInt,
     de_reg.rs1,
     IndexedSeq(
+      // This is the highest priority since it has the latest result
+      // Forward from EX/MEM stage register
+      ForwardExeOperand.FWD_EM.asUInt -> em_reg.alu,
       // Forward from MEM/WB stage register
-      (forwardingUnit.io.forward_exe_rs1 === ForwardExeOperand.FWD_MW) -> regWrite,
-      (forwardingUnit.io.forward_exe_rs1 === ForwardExeOperand.FWD_EM) -> em_reg.alu,
-      (forwardingUnit.io.forward_exe_rs1 === ForwardExeOperand.FWD_NONE) -> de_reg.rs1
+      ForwardExeOperand.FWD_MW.asUInt -> regWrite,
+      ForwardExeOperand.FWD_NONE.asUInt -> de_reg.rs1
     )
   )
 
-  ex_rs2 := MuxCase(
+  ex_rs2 := MuxLookup(
+    forwardingUnit.io.forward_exe_rs2.asUInt,
     de_reg.rs2,
     IndexedSeq(
+      // This is the highest priority since it has the latest result
+      // Forward from EX/MEM stage register
+      ForwardExeOperand.FWD_EM.asUInt -> em_reg.alu,
       // Forward from MEM/WB stage register
-      (forwardingUnit.io.forward_exe_rs2 === ForwardExeOperand.FWD_MW) -> regWrite,
-      (forwardingUnit.io.forward_exe_rs2 === ForwardExeOperand.FWD_EM) -> em_reg.alu,
-      (forwardingUnit.io.forward_exe_rs2 === ForwardExeOperand.FWD_NONE) -> de_reg.rs2
+      ForwardExeOperand.FWD_MW.asUInt -> regWrite,
+      ForwardExeOperand.FWD_NONE.asUInt -> de_reg.rs2
     )
   )
 
