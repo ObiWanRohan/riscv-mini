@@ -12,6 +12,8 @@ import mini.common.RISCVConstants._
 object Const {
   val PC_START = 0x200
   val PC_EVEC = 0x100
+  // Memory Mapped IO address
+  val HOST_ADDR = 0x1000
 }
 
 class DatapathIO(xlen: Int) extends Bundle {
@@ -543,7 +545,13 @@ class Datapath(val conf: CoreConfig) extends Module {
   csr.io.pc_check := pc_check
   csr.io.ld_type := em_reg.ctrl.ld_type
   csr.io.st_type := em_reg.ctrl.st_type
-  io.host <> csr.io.host
+
+  // Temporarily changed for tests
+  // io.host <> csr.io.host
+  csr.io.host.fromhost.bits := 0.U
+  csr.io.host.fromhost.valid := false.B
+
+  val memReqValid = !full_stall && (de_reg.ctrl.st_type.asUInt.orR || de_reg.ctrl.ld_type.asUInt.orR)
 
   val wb_rd_addr = mw_reg.inst(RD_MSB, RD_LSB)
 
@@ -551,8 +559,18 @@ class Datapath(val conf: CoreConfig) extends Module {
   val daddr = Mux(full_stall, em_reg.alu, alu.io.sum) >> 2.U << 2.U
   val woffset = (alu.io.sum(1) << 4.U).asUInt | (alu.io.sum(0) << 3.U).asUInt
 
+  val tohost_reg = Reg(UInt(conf.xlen.W))
+  io.host.tohost := tohost_reg
+
+  // Writing to host IO
+  when(memReqValid && de_reg.ctrl.st_type.asUInt.orR && daddr === Const.HOST_ADDR.U) {
+    tohost_reg := ex_rs2
+  }.otherwise {
+    tohost_reg := 0.U
+  }
+
   // Note the request being made when the instruction is in the previous stage
-  io.dcache.req.valid := !full_stall && (de_reg.ctrl.st_type.asUInt.orR || de_reg.ctrl.ld_type.asUInt.orR)
+  io.dcache.req.valid := memReqValid
   io.dcache.req.bits.addr := daddr
   io.dcache.req.bits.data := ex_rs2 << woffset
   io.dcache.req.bits.mask := MuxLookup(
