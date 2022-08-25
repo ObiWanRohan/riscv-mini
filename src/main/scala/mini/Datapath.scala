@@ -305,7 +305,7 @@ class Datapath(val conf: CoreConfig) extends Module {
     regFile.io.rdata1,
     IndexedSeq(
       // Forward from MEM/WB stage register
-      (forwardingUnit.io.forward_dec_opA === ForwardDecOperand.FWD_MW) -> regWrite,
+      (forwardingUnit.io.forward_dec_opA === ForwardDecOperand.FWD_MW) -> mw_reg.wb_data,
       // Forward from EX/MEM stage register
       (forwardingUnit.io.forward_dec_opA === ForwardDecOperand.FWD_EM) -> em_reg.alu,
       // No forwarding
@@ -316,7 +316,7 @@ class Datapath(val conf: CoreConfig) extends Module {
     regFile.io.rdata2,
     IndexedSeq(
       // Forward from MEM/WB stage register
-      (forwardingUnit.io.forward_dec_opB === ForwardDecOperand.FWD_MW) -> regWrite,
+      (forwardingUnit.io.forward_dec_opB === ForwardDecOperand.FWD_MW) -> mw_reg.wb_data,
       // Forward from EX/MEM stage register
       (forwardingUnit.io.forward_dec_opB === ForwardDecOperand.FWD_EM) -> em_reg.alu,
       // No forwarding
@@ -416,7 +416,7 @@ class Datapath(val conf: CoreConfig) extends Module {
       // This should be the highest priority since it has the latest result
       ForwardExeOperand.FWD_EM.asUInt -> em_reg.alu,
       // Forward from MEM/WB stage register
-      ForwardExeOperand.FWD_MW.asUInt -> regWrite,
+      ForwardExeOperand.FWD_MW.asUInt -> mw_reg.wb_data,
       ForwardExeOperand.FWD_NONE.asUInt -> de_reg.opA
     )
   )
@@ -426,7 +426,7 @@ class Datapath(val conf: CoreConfig) extends Module {
     IndexedSeq(
       // Forward from MEM/WB stage register
       ForwardExeOperand.FWD_EM.asUInt -> em_reg.alu,
-      ForwardExeOperand.FWD_MW.asUInt -> regWrite,
+      ForwardExeOperand.FWD_MW.asUInt -> mw_reg.wb_data,
       ForwardExeOperand.FWD_NONE.asUInt -> de_reg.opB
     )
   )
@@ -439,7 +439,7 @@ class Datapath(val conf: CoreConfig) extends Module {
       // Forward from EX/MEM stage register
       ForwardExeOperand.FWD_EM.asUInt -> em_reg.alu,
       // Forward from MEM/WB stage register
-      ForwardExeOperand.FWD_MW.asUInt -> regWrite,
+      ForwardExeOperand.FWD_MW.asUInt -> mw_reg.wb_data,
       ForwardExeOperand.FWD_NONE.asUInt -> de_reg.rs1
     )
   )
@@ -452,7 +452,7 @@ class Datapath(val conf: CoreConfig) extends Module {
       // Forward from EX/MEM stage register
       ForwardExeOperand.FWD_EM.asUInt -> em_reg.alu,
       // Forward from MEM/WB stage register
-      ForwardExeOperand.FWD_MW.asUInt -> regWrite,
+      ForwardExeOperand.FWD_MW.asUInt -> mw_reg.wb_data,
       ForwardExeOperand.FWD_NONE.asUInt -> de_reg.rs2
     )
   )
