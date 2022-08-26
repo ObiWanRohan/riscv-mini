@@ -36,7 +36,7 @@ $(CUSTOM_BMARK_BIN): $(CUSTOM_BMARK_OBJS)
 
 %.dump: %
 	riscv32-unknown-elf-objdump \
-	--disassemble-all --disassemble-zeroes --section=.text --section=.text.startup --section=.data \
+	-M numeric,no-aliases --disassemble-all --disassemble-zeroes --section=.text --section=.text.startup --section=.data \
 	$< > $@
 
 clean:

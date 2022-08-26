@@ -11,9 +11,9 @@ object ForwardDecOperand extends ChiselEnum {
   // Don't forward anything
   val FWD_NONE = Value(0.U)
   // Forward value from EM pipeline register
-  val FWD_EM = Value(2.U)
+  val FWD_EM = Value(1.U)
   // Forward value from MW pipeline register
-  val FWD_MW = Value(3.U)
+  val FWD_MW = Value(2.U)
 }
 
 // Forwarding options for Execute stage
@@ -21,9 +21,9 @@ object ForwardExeOperand extends ChiselEnum {
   // Don't forward anything
   val FWD_NONE = Value(0.U)
   // Forward value from EM pipeline register
-  val FWD_EM = Value(2.U)
+  val FWD_EM = Value(1.U)
   // Forward value from MW pipeline register
-  val FWD_MW = Value(3.U)
+  val FWD_MW = Value(2.U)
 }
 
 class ForwardingUnitIO(width: Int) extends Bundle {
@@ -134,7 +134,7 @@ class ForwardingUnit(width: Int) extends Module {
         io.wb_rd === exe_rs1_addr     // The destination register is the same that is being read
         && exe_rs1_addr.orR          // The destination register is not register x0
         && io.wb_en                   // Writeback is enabled
-        && io.em_reg.ctrl.A_sel === ASel.A_RS1
+        && io.de_reg.ctrl.A_sel === ASel.A_RS1
       ) -> ForwardExeOperand.FWD_MW
     )
 

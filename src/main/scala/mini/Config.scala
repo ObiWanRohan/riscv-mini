@@ -11,7 +11,7 @@ object MiniConfig {
     val xlen = 32
     Config(
       core = CoreConfig(
-        trace = true,
+        trace = false,
         xlen = xlen,
         makeAlu = new AluArea(_),
         makeBrCond = new BrCondArea(_),

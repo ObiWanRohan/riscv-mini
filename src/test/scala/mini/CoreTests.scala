@@ -67,7 +67,7 @@ class CoreSimpleTests extends AnyFlatSpec with ChiselScalatestTester {
   it should "execute a simple test" in {
     test(new CoreTester(new Core(DefaultCoreConfig()), "rv32ui-p-simple"))
       .withAnnotations(Seq(VerilatorBackendAnnotation, WriteVcdAnnotation))
-      .runUntilStop(100)
+      .runUntilStop(500)
   }
 }
 

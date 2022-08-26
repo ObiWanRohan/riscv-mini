@@ -20,8 +20,16 @@ object RISCVConstants {
   // CSR Register Address
   val CSR_ADDR_MSB = 31
   val CSR_ADDR_LSB = 20
+  val CSR_ADDR_WIDTH = 12.W
 
   val X0 = 0.U
+
+  // Counters
+  val COUNTER_WIDTH = 64
+  val COUNTER_LOW_LSB = 0
+  val COUNTER_LOW_MSB = 31
+  val COUNTER_HIGH_LSB = 32
+  val COUNTER_HIGH_MSB = 63
 
   // The Bubble Instruction (Machine generated NOP)
   // Insert (XOR x0,x0,x0) which is different from software compiler
