@@ -560,13 +560,17 @@ class Datapath(val conf: CoreConfig) extends Module {
   val woffset = (alu.io.sum(1) << 4.U).asUInt | (alu.io.sum(0) << 3.U).asUInt
 
   val tohost_reg = Reg(UInt(conf.xlen.W))
-  io.host.tohost := tohost_reg
+
+  val tohost_mem_req = memReqValid && de_reg.ctrl.st_type.asUInt.orR && daddr === Const.HOST_ADDR.U
+
+  // Use data from memory if the memory request was valid in the previous cycle
+  // i.e the data is being written in the current cycle. Otherwise send data from CSR
+  io.host.tohost := Mux(RegNext(tohost_mem_req), tohost_reg, csr.io.host.tohost)
 
   // Writing to host IO
-  when(memReqValid && de_reg.ctrl.st_type.asUInt.orR && daddr === Const.HOST_ADDR.U) {
+  when(tohost_mem_req) {
+    // TODO, add mask here
     tohost_reg := ex_rs2
-  }.otherwise {
-    tohost_reg := 0.U
   }
 
   // Note the request being made when the instruction is in the previous stage
