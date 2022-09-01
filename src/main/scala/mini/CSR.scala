@@ -243,7 +243,7 @@ class CSR(val xlen: Int) extends Module {
   val PRV = RegInit(CSR.PRV_M)
 
   // Previous Privilege Modes
-  val MPP = RegInit(CSR.PRV_U)
+  val MPP = RegInit(CSR.PRV_M)
   val HPP = 0.U(2.W)
   val SPP = 0.U(1.W)
 
@@ -563,7 +563,7 @@ class CSR(val xlen: Int) extends Module {
     ) || (
       privInst && !privValid
     ) || (
-      isEcall && (PRV === CSR.PRV_U)
+      isEcall
     ) || isEbreak
   )
   io.evec := mtvec
@@ -589,7 +589,7 @@ class CSR(val xlen: Int) extends Module {
           iaddrInvalid -> Cause.InstAddrMisaligned,
           laddrInvalid -> Cause.LoadAddrMisaligned,
           saddrInvalid -> Cause.StoreAddrMisaligned,
-          (isEcall && (PRV === CSR.PRV_U)) -> Cause.EcallFromUMode,
+          (isEcall) -> Cause.EcallFromUMode,
           isEbreak -> Cause.Breakpoint
         )
       )
