@@ -117,7 +117,7 @@ object CSR {
   val mscratch = 0x340.U(CSR_ADDR_WIDTH)
   val mepc = 0x341.U(CSR_ADDR_WIDTH)
   val mcause = 0x342.U(CSR_ADDR_WIDTH)
-  val mbadaddr = 0x343.U(CSR_ADDR_WIDTH)
+  val mtval = 0x343.U(CSR_ADDR_WIDTH)
   val mip = 0x344.U(CSR_ADDR_WIDTH)
 
   // Machine Memory Protection
@@ -175,7 +175,7 @@ object CSR {
     mscratch,
     mepc,
     mcause,
-    mbadaddr,
+    mtval,
     mip,
     mtohost,
     mfromhost,
@@ -438,7 +438,7 @@ class CSR(val xlen: Int) extends Module {
 
   val mepc = Reg(UInt(xlen.W))
   val mcause = Reg(UInt(xlen.W))
-  val mbadaddr = Reg(UInt(xlen.W))
+  val mtval = Reg(UInt(xlen.W))
 
   val mtohost = RegInit(0.U(xlen.W))
   val mfromhost = Reg(UInt(xlen.W))
@@ -476,7 +476,7 @@ class CSR(val xlen: Int) extends Module {
     BitPat(CSR.mscratch) -> mscratch,
     BitPat(CSR.mepc) -> mepc,
     BitPat(CSR.mcause) -> mcause,
-    BitPat(CSR.mbadaddr) -> mbadaddr,
+    BitPat(CSR.mtval) -> mtval,
     BitPat(CSR.mip) -> mip,
     BitPat(CSR.mtohost) -> mtohost,
     BitPat(CSR.mfromhost) -> mfromhost,
@@ -607,7 +607,7 @@ class CSR(val xlen: Int) extends Module {
         UPIE := UIE
       }
 
-      when(iaddrInvalid || laddrInvalid || saddrInvalid) { mbadaddr := io.addr }
+      when(iaddrInvalid || laddrInvalid || saddrInvalid) { mtval := io.addr }
     }.elsewhen(isMret) {
       PRV := MPP
       MIE := MPIE
@@ -643,7 +643,7 @@ class CSR(val xlen: Int) extends Module {
         .elsewhen(csr_addr === CSR.mscratch) { mscratch := wdata }
         .elsewhen(csr_addr === CSR.mepc) { mepc := wdata >> 2.U << 2.U }
         .elsewhen(csr_addr === CSR.mcause) { mcause := wdata & (BigInt(1) << (xlen - 1) | 0xf).U }
-        .elsewhen(csr_addr === CSR.mbadaddr) { mbadaddr := wdata }
+        .elsewhen(csr_addr === CSR.mtval) { mtval := wdata }
         .elsewhen(csr_addr === CSR.mtohost) { mtohost := wdata }
         .elsewhen(csr_addr === CSR.mfromhost) { mfromhost := wdata }
         .elsewhen(csr_addr === CSR.cyclew) { cycle := wdata }

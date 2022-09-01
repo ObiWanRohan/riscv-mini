@@ -75,7 +75,7 @@ trait TestUtils {
         "mscratch",
         "mepc",
         "mcause",
-        "mbadaddr",
+        "mtval",
         "mip",
         "mtohost",
         "mfromhost",
