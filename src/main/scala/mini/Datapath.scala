@@ -276,10 +276,13 @@ class Datapath(val conf: CoreConfig) extends Module {
     pc + 4.U,
     IndexedSeq(
       csr.io.exception -> csr.io.evec,
-      (full_stall || dec_stall) -> pc,
       (de_reg.ctrl.pc_sel === PCSel.PC_EPC) -> csr.io.epc,
       ((de_reg.ctrl.pc_sel === PCSel.PC_ALU) || (brCond.io.taken)) -> (alu.io.sum >> 1.U << 1.U),
-      (de_reg.ctrl.pc_sel === PCSel.PC_0) -> pc
+      (de_reg.ctrl.pc_sel === PCSel.PC_0) -> pc,
+      (full_stall || dec_stall) -> pc,
+      // Not adding !full_stall && !dec_stall since this is a priority Mux
+      // and the above line ensures that both are non-zero.
+      (io.ctrl.fencei && de_reg.ctrl.pc_sel === PCSel.PC_4) -> pc
     )
   )
 
