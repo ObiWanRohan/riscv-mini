@@ -8,7 +8,7 @@ out_dir    = $(base_dir)/outputs
 nproc      = $(shell nproc --ignore 1)		# Keep 1 core for other tasks
 
 SBT       = sbt
-SBT_FLAGS = --ivy $(base_dir)/.ivy2
+SBT_FLAGS = -Dsbt.ivy.home="$(base_dir)/.ivy2"
 
 VTILE_CYCLES = 50000
 
