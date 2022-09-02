@@ -171,7 +171,8 @@ trait TestUtils {
     Cat(rand_csr, rand_rs1, Funct3.CSRRCI, rand_rd, Opcode.SYSTEM),
     ECALL,
     EBREAK,
-    ERET,
+    MRET,
+    URET,
     nop,
     rand_inst
   )
