@@ -46,6 +46,16 @@ $(test_out_files): $(out_dir)/%.out: $(base_dir)/VTile $(base_dir)/tests/%.hex
 
 run-tests: $(test_out_files)
 
+benchmark_out_dir = $(out_dir)/benchmarks
+benchmark_hex_files = $(wildcard $(base_dir)/tests/benchmarks/*.riscv.hex)
+benchmark_out_files = $(foreach f,$(benchmark_hex_files),$(patsubst %.hex,%.out,$(benchmark_out_dir)/$(notdir $f)))
+
+$(benchmark_out_files): $(benchmark_out_dir)/%.out: $(base_dir)/VTile $(base_dir)/tests/benchmarks/%.hex
+	mkdir -p $(out_dir)/benchmarks
+	$^ $(patsubst %.out,-v %.vcd,$@) -t $(VTILE_CYCLES) 2> >(tee $@)
+
+run-benchmarks: $(benchmark_out_files)
+
 # run custom benchamrk
 custom_bmark_hex ?= $(base_dir)/custom-bmark/main.hex
 custom_bmark_out  = $(patsubst %.hex,%.out,$(out_dir)/$(notdir $(custom_bmark_hex)))
