@@ -65,12 +65,12 @@ class MemoryWritebackPipelineRegister(xlen: Int) extends Bundle {
   val rs2 = UInt(xlen.W) // needed for writeback
   val dcache_out = SInt(xlen.W) //
 
-  val ctrl = new ControlSignals
-}
+//   val ctrl = new ControlSignals
+// }
 
 class Datapath(val conf: CoreConfig) extends Module {
   val io = IO(new DatapathIO(conf.xlen))
-  val csr = Module(new CSR(conf.xlen)) //mem stage
+  // val csr = Module(new CSR(conf.xlen)) //mem stage
   // val regFile = Module(new RegFile(conf.xlen)) //decode stage
   val alu = Module(conf.makeAlu(conf.xlen)) //execute stage
   // val immGen = Module(conf.makeImmGen(conf.xlen)) //decode stage
@@ -515,18 +515,18 @@ class Datapath(val conf: CoreConfig) extends Module {
     */
 
   // Load
-  val loffset = (em_reg.alu(1) << 4.U).asUInt | (em_reg.alu(0) << 3.U).asUInt
-  val lshift = io.dcache.resp.bits.data >> loffset
-  load := MuxLookup(
-    em_reg.ctrl.ld_type.asUInt,
-    io.dcache.resp.bits.data.zext,
-    Seq(
-      LdType.LD_LH.asUInt -> lshift(15, 0).asSInt,
-      LdType.LD_LB.asUInt -> lshift(7, 0).asSInt,
-      LdType.LD_LHU.asUInt -> lshift(15, 0).zext,
-      LdType.LD_LBU.asUInt -> lshift(7, 0).zext
-    )
-  )
+  // val loffset = (em_reg.alu(1) << 4.U).asUInt | (em_reg.alu(0) << 3.U).asUInt
+  // val lshift = io.dcache.resp.bits.data >> loffset
+  // load := MuxLookup(
+  //   em_reg.ctrl.ld_type.asUInt,
+  //   io.dcache.resp.bits.data.zext,
+  //   Seq(
+  //     LdType.LD_LH.asUInt -> lshift(15, 0).asSInt,
+  //     LdType.LD_LB.asUInt -> lshift(7, 0).asSInt,
+  //     LdType.LD_LHU.asUInt -> lshift(15, 0).zext,
+  //     LdType.LD_LBU.asUInt -> lshift(7, 0).zext
+  //   )
+  // )
 
   // CSR access -----------------------------VERIFY CSR EXECUTE / MEMORY PIPELINE ACCESS BELOW
   csr.io.stall := fetchStage.io.full_stall
@@ -550,9 +550,7 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   val wb_rd_addr = mw_reg.inst(RD_MSB, RD_LSB)
 
-  // D$ access
-  val daddr = Mux(fetchStage.io.full_stall, em_reg.alu, alu.io.sum) >> 2.U << 2.U
-  val woffset = (alu.io.sum(1) << 4.U).asUInt | (alu.io.sum(0) << 3.U).asUInt
+  // val wb_rd_addr = mw_reg.inst(RD_MSB, RD_LSB)
 
   val tohost_reg = Reg(UInt(conf.xlen.W))
 
@@ -614,12 +612,12 @@ class Datapath(val conf: CoreConfig) extends Module {
     mw_reg.dcache_out := load
     // em_reg.csr_in := alu.io.out
 
-    // illegal := de_reg.ctrl.illegal
+  //   // illegal := de_reg.ctrl.illegal
 
-    // Might need to convert this to a wire and make it a MuxLookup
-    // pc_check := de_reg.ctrl.pc_sel === PCSel.PC_ALU
+  //   // Might need to convert this to a wire and make it a MuxLookup
+  //   // pc_check := de_reg.ctrl.pc_sel === PCSel.PC_ALU
 
-  }
+  // }
 
   /**
     * Writeback stage
