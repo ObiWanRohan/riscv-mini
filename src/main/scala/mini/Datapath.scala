@@ -72,9 +72,9 @@ class Datapath(val conf: CoreConfig) extends Module {
   val io = IO(new DatapathIO(conf.xlen))
   // val csr = Module(new CSR(conf.xlen)) //mem stage
   // val regFile = Module(new RegFile(conf.xlen)) //decode stage
-  val alu = Module(conf.makeAlu(conf.xlen)) //execute stage
+  // val alu = Module(conf.makeAlu(conf.xlen)) //execute stage
   // val immGen = Module(conf.makeImmGen(conf.xlen)) //decode stage
-  val brCond = Module(conf.makeBrCond(conf.xlen)) //execute stage
+  // val brCond = Module(conf.makeBrCond(conf.xlen)) //execute stage
   val forwardingUnit = Module(conf.makeForwardingUnit(conf.xlen)) //datapath
 
   import Control._
@@ -627,9 +627,9 @@ class Datapath(val conf: CoreConfig) extends Module {
   regFile.io.waddr := wb_rd_addr
   regFile.io.wdata := mw_reg.wb_data
 
-  forwardingUnit.io.wb_rd := wb_rd_addr
-  forwardingUnit.io.wb_en := mw_reg.ctrl.wb_en
-  forwardingUnit.io.wb_sel := mw_reg.ctrl.wb_sel
+  // forwardingUnit.io.wb_rd := wb_rd_addr
+  // forwardingUnit.io.wb_en := mw_reg.ctrl.wb_en
+  // forwardingUnit.io.wb_sel := mw_reg.ctrl.wb_sel
 
   // TODO: re-enable through AOP
   if (conf.trace) {
@@ -638,7 +638,7 @@ class Datapath(val conf: CoreConfig) extends Module {
       em_reg.pc,
       wb_rd_addr,
       regWrite,
-      em_reg.ctrl.wb_en && !fetchStage.io.full_stall && !csr.io.exception,
+      em_reg.ctrl.wb_en && !full_stall && !csr.io.exception,
       em_reg.inst(RS1_MSB, RS1_LSB), // RS1 address
       RegNext(de_reg.opA),
       em_reg.inst(RS2_MSB, RS2_LSB), // RS2 address
