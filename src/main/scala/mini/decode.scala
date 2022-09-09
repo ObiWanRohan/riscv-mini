@@ -6,7 +6,7 @@ import chisel3.experimental.BundleLiterals._
 
 import mini.common._
 import mini.common.RISCVConstants._
-import mini.CoreConfig
+import mini.{BrCond, Const, CoreConfig, Instructions}
 
 import Control._
 import CPUControlSignalTypes._
@@ -27,33 +27,14 @@ class DecodeExecutePipelineRegister(xlen: Int) extends Bundle {
 
 class DecodeStageIO(xlen: Int) extends Bundle {
   // val ctrl = Output(xlen.W)
-  val rs1 = Output(UInt(conf.xlen.W))
-  val rs2 = Output(UInt(conf.xlen.W))
-//   val dpathIO = Output(xlen.W)
-  val de_reg = RegInit(new DecodeExecutePipelineRegister(xlen)).Lit(
-    _.pc -> 0.U,
-    _.inst -> Instructions.NOP,
-    _.opA -> 0.U,
-    _.opB -> 0.U,
-    _.rs2 -> 0.U,
-    _.ctrl -> (new ControlSignals).Lit(
-      _.pc_sel -> PCSel.PC_4,
-      _.A_sel -> ASel.A_RS1,
-      _.B_sel -> BSel.B_RS2,
-      _.imm_sel -> ImmSel.IMM_X,
-      _.alu_op -> AluSel.ALU_XOR,
-      _.br_type -> BrType.BR_XXX,
-      _.inst_kill -> N.asUInt.asBool,
-      _.pipeline_kill -> N.asUInt.asBool,
-      _.st_type -> StType.ST_XXX,
-      _.ld_type -> LdType.LD_XXX,
-      _.wb_sel -> WbSel.WB_ALU,
-      _.wb_en -> Y.asUInt.asBool,
-      _.csr_cmd -> CSR.N,
-      _.illegal -> N
-    )
-  )
-  val fd_reg = Input(FetchStage.io.fd_reg)
+  // val rs1 = Output(UInt(conf.xlen.W))
+  // val rs2 = Output(UInt(conf.xlen.W))
+  val brCond_taken = Input(Bool())
+
+  val fd_reg = Input(FetchDecodePipelineRegister)
+  val em_reg = Input(ExecuteMemoryPipelineRegister)
+
+  val de_reg = Output(DecodeExecutePipelineRegister)
 
 }
 
@@ -62,11 +43,39 @@ class DecodeStage(val conf: CoreConfig) extends Module {
   val regFile = Module(new RegFile(conf.xlen))
   val immGen = Module(conf.makeImmGen(conf.xlen))
 
+  val de_reg = RegInit(
+    new DecodeExecutePipelineRegister(conf.xlen).Lit(
+      // TODO:
+      // give default values .defaults()
+      _.inst -> Instructions.NOP,
+      _.pc -> 0.U,
+      _.opA -> 0.U,
+      _.opB -> 0.U,
+      _.rs2 -> 0.U,
+      _.ctrl -> (new ControlSignals).Lit(
+        _.pc_sel -> PCSel.PC_4,
+        _.A_sel -> ASel.A_RS1,
+        _.B_sel -> BSel.B_RS2,
+        _.imm_sel -> ImmSel.IMM_X,
+        _.alu_op -> AluSel.ALU_XOR,
+        _.br_type -> BrType.BR_XXX,
+        _.inst_kill -> N.asUInt.asBool,
+        _.pipeline_kill -> N.asUInt.asBool,
+        _.st_type -> StType.ST_XXX,
+        _.ld_type -> LdType.LD_XXX,
+        _.wb_sel -> WbSel.WB_ALU,
+        _.wb_en -> Y.asUInt.asBool,
+        _.csr_cmd -> CSR.N,
+        _.illegal -> N
+      )
+    )
+  )
+
+  io.brCond_taken := BrCondIO.taken;
+
   val fd_reg = io.fd_reg
   val de_reg = io.de_reg
-  // Connect to control signal IO
-  // The instruction from the instruction memory
-  io.ctrl.inst := fd_reg.inst
+  val em_reg = io.em_reg
 
   // regFile read
   // Register number fields from instruction
@@ -86,7 +95,7 @@ class DecodeStage(val conf: CoreConfig) extends Module {
   // val rs1 = Wire(UInt(conf.xlen.W))
   // val rs2 = Wire(UInt(conf.xlen.W))
 
-  io.rs1 := MuxCase(
+  de_reg.rs1 := MuxCase(
     regFile.io.rdata1,
     IndexedSeq(
       // Forward from MEM/WB stage register
@@ -97,7 +106,7 @@ class DecodeStage(val conf: CoreConfig) extends Module {
       (forwardingUnit.io.forward_dec_opA === ForwardDecOperand.FWD_NONE) -> regFile.io.rdata1
     )
   )
-  io.rs2 := MuxCase(
+  de_reg.rs2 := MuxCase(
     regFile.io.rdata2,
     IndexedSeq(
       // Forward from MEM/WB stage register
@@ -182,5 +191,12 @@ class DecodeStage(val conf: CoreConfig) extends Module {
   val de_rs2_addr = de_reg.inst(RS2_MSB, RS2_LSB)
 
   forwardingUnit.io.de_reg := de_reg
+
+  // IO connections to othher modules/stages
+
+  // Connect to control signal IO
+  // The instruction from the instruction memory
+  io.ctrl.inst := io.fd_reg.inst
+  io.de_reg := de_reg;
 
 }
