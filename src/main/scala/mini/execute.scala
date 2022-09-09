@@ -6,7 +6,7 @@ import chisel3.experimental.BundleLiterals._
 
 import mini.common._
 import mini.common.RISCVConstants._
-import mini.CoreConfig
+import mini.{CoreConfig, RegFile}
 
 import Control._
 import CPUControlSignalTypes._
@@ -28,7 +28,7 @@ class ExecuteStageIO(xlen: Int) extends Bundle {
 
   val illegal = Output(Bool())
   val pc_check = Output(Bool())
-  val em_reg = Output(new ExecuteMemoryPipelineRegister)
+  val em_reg = Output(new ExecuteMemoryPipelineRegister(xlen))
 
 }
 

@@ -45,10 +45,10 @@ class FetchStage(val conf: CoreConfig) extends Module {
   val io = IO(new FetchStageIO(conf.xlen))
   val started = RegNext(reset.asBool)
 
-  io.brCond_taken := BrCondIO.brCond_taken;
-  io.alu_sum := AluIO.sum;
-  io.csr_epc := CSRIO.epc;
-  io.csr_evec := CSRIO.evec;
+  io.brCond_taken := BrCondIO.brCond_taken
+  io.alu_sum := AluIO.sum
+  io.csr_epc := CSRIO.epc
+  io.csr_evec := CSRIO.evec
 
   val fd_reg = RegInit(
     new FetchDecodePipelineRegister(conf.xlen)
