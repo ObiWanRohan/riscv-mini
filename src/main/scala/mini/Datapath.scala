@@ -8,7 +8,7 @@ import chisel3.experimental.BundleLiterals._
 
 import mini.common._
 import mini.common.RISCVConstants._
-
+import mini.Datapath._
 object Const {
   val PC_START = 0x200
   val PC_EVEC = 0x100
@@ -23,28 +23,28 @@ class DatapathIO(xlen: Int) extends Bundle {
   val ctrl = Flipped(new ControlSignalsIO)
 }
 
-class FetchDecodePipelineRegister(xlen: Int) extends Bundle {
-  val inst = chiselTypeOf(Instructions.NOP)
-  val pc = UInt(xlen.W)
-  val ctrl = new ControlSignals
-}
+// class FetchDecodePipelineRegister(xlen: Int) extends Bundle {
+//   val inst = chiselTypeOf(Instructions.NOP)
+//   val pc = UInt(xlen.W)
+//   val ctrl = new ControlSignals
+// }
 
-class DecodeExecutePipelineRegister(xlen: Int) extends Bundle {
-  val pc = UInt(xlen.W)
-  val inst = chiselTypeOf(Instructions.NOP)
-  val opA = UInt(xlen.W)
-  val opB = UInt(xlen.W)
-  val rs1 = UInt(xlen.W)
-  val rs2 = UInt(xlen.W)
+// class DecodeExecutePipelineRegister(xlen: Int) extends Bundle {
+//   val pc = UInt(xlen.W)
+//   val inst = chiselTypeOf(Instructions.NOP)
+//   val opA = UInt(xlen.W)
+//   val opB = UInt(xlen.W)
+//   val rs1 = UInt(xlen.W)
+//   val rs2 = UInt(xlen.W)
 
-  val immOut = UInt(xlen.W)
+//   val immOut = UInt(xlen.W)
 
-  val ctrl = new ControlSignals
+//   val ctrl = new ControlSignals
 
-  // This held the address for the writeback
-  // Disabled for now since the address can be taken from the instruction
-  // val wb = Reg(UInt())
-}
+// This held the address for the writeback
+// Disabled for now since the address can be taken from the instruction
+// val wb = Reg(UInt())
+// }
 
 class ExecuteMemoryPipelineRegister(xlen: Int) extends Bundle {
   val inst = chiselTypeOf(Instructions.NOP)
@@ -70,12 +70,12 @@ class MemoryWritebackPipelineRegister(xlen: Int) extends Bundle {
 
 class Datapath(val conf: CoreConfig) extends Module {
   val io = IO(new DatapathIO(conf.xlen))
-  val csr = Module(new CSR(conf.xlen))
-  val regFile = Module(new RegFile(conf.xlen))
-  val alu = Module(conf.makeAlu(conf.xlen))
-  val immGen = Module(conf.makeImmGen(conf.xlen))
-  val brCond = Module(conf.makeBrCond(conf.xlen))
-  val forwardingUnit = Module(conf.makeForwardingUnit(conf.xlen))
+  val csr = Module(new CSR(conf.xlen)) //mem stage
+  val regFile = Module(new RegFile(conf.xlen)) //decode stage
+  val alu = Module(conf.makeAlu(conf.xlen)) //execute stage
+  val immGen = Module(conf.makeImmGen(conf.xlen)) //decode stage
+  val brCond = Module(conf.makeBrCond(conf.xlen)) //execute stage
+  val forwardingUnit = Module(conf.makeForwardingUnit(conf.xlen)) //datapath
 
   import Control._
   import CPUControlSignalTypes._
@@ -83,42 +83,42 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   /** Pipeline State Registers * */
 
-  /** *** Fetch / Decode Registers ****
-    */
-  val fd_reg = RegInit(
-    (new FetchDecodePipelineRegister(conf.xlen)).Lit(
-      _.inst -> Instructions.NOP,
-      _.pc -> 0.U
-    )
-  )
+  // /** *** Fetch / Decode Registers ****
+  //   */
+  // val fd_reg = RegInit(
+  //   (new FetchDecodePipelineRegister(conf.xlen)).Lit(
+  //     _.inst -> Instructions.NOP,
+  //     _.pc -> 0.U
+  //   )
+  // )
 
   /** *** Decode / Execute Registers ****
     */
-  val de_reg = RegInit(
-    (new DecodeExecutePipelineRegister(conf.xlen)).Lit(
-      _.inst -> Instructions.NOP,
-      _.pc -> 0.U,
-      _.opA -> 0.U,
-      _.opB -> 0.U,
-      _.rs2 -> 0.U,
-      _.ctrl -> (new ControlSignals).Lit(
-        _.pc_sel -> PCSel.PC_4,
-        _.A_sel -> ASel.A_RS1,
-        _.B_sel -> BSel.B_RS2,
-        _.imm_sel -> ImmSel.IMM_X,
-        _.alu_op -> AluSel.ALU_XOR,
-        _.br_type -> BrType.BR_XXX,
-        _.inst_kill -> N.asUInt.asBool,
-        _.pipeline_kill -> N.asUInt.asBool,
-        _.st_type -> StType.ST_XXX,
-        _.ld_type -> LdType.LD_XXX,
-        _.wb_sel -> WbSel.WB_ALU,
-        _.wb_en -> Y.asUInt.asBool,
-        _.csr_cmd -> CSR.N,
-        _.illegal -> N
-      )
-    )
-  )
+  // val de_reg = RegInit(
+  //   (new DecodeExecutePipelineRegister(conf.xlen)).Lit(
+  //     _.inst -> Instructions.NOP,
+  //     _.pc -> 0.U,
+  //     _.opA -> 0.U,
+  //     _.opB -> 0.U,
+  //     _.rs2 -> 0.U,
+  //     _.ctrl -> (new ControlSignals).Lit(
+  //       _.pc_sel -> PCSel.PC_4,
+  //       _.A_sel -> ASel.A_RS1,
+  //       _.B_sel -> BSel.B_RS2,
+  //       _.imm_sel -> ImmSel.IMM_X,
+  //       _.alu_op -> AluSel.ALU_XOR,
+  //       _.br_type -> BrType.BR_XXX,
+  //       _.inst_kill -> N.asUInt.asBool,
+  //       _.pipeline_kill -> N.asUInt.asBool,
+  //       _.st_type -> StType.ST_XXX,
+  //       _.ld_type -> LdType.LD_XXX,
+  //       _.wb_sel -> WbSel.WB_ALU,
+  //       _.wb_en -> Y.asUInt.asBool,
+  //       _.csr_cmd -> CSR.N,
+  //       _.illegal -> N
+  //     )
+  //   )
+  // )
 
   /** *** Execute / Mem Registers ****
     */
@@ -196,24 +196,24 @@ class Datapath(val conf: CoreConfig) extends Module {
   /**
     * *** Fetch Stage ***
     */
-  val started = RegNext(reset.asBool)
+  // val started = RegNext(reset.asBool)
 
-  // Full pipeline stall for when the IMem or DMem is not responding
-  // This can also be called cache_miss_stall
-  val full_stall = !io.icache.resp.valid || !io.dcache.resp.valid
+  // // Full pipeline stall for when the IMem or DMem is not responding
+  // // This can also be called cache_miss_stall
+  // val fetchStage.io.full_stall = !io.icache.resp.valid || !io.dcache.resp.valid
 
-  // Decode Stage Stall
-  // Can also be called hazard_stall
-  val dec_stall = Wire(Bool())
+  // // Decode Stage Stall
+  // // Can also be called hazard_stall
+  // val dec_stall = Wire(Bool())
 
-  // Currently only stalling on load hazards
-  dec_stall := (
-    de_reg.ctrl.ld_type =/= LdType.LD_XXX // Instruction in Execute stage is a load
-      && (
-        (de_reg.inst(RD_MSB, RD_LSB) === fd_reg.inst(RS1_MSB, RS1_LSB))
-          || (de_reg.inst(RD_MSB, RD_LSB) === fd_reg.inst(RS2_MSB, RS2_LSB))
-      ) // And instruction in decode stage is reading the loaded value
-  )
+  // // Currently only stalling on load hazards
+  // dec_stall := (
+  //   de_reg.ctrl.ld_type =/= LdType.LD_XXX // Instruction in Execute stage is a load
+  //     && (
+  //       (de_reg.inst(RD_MSB, RD_LSB) === fd_reg.inst(RS1_MSB, RS1_LSB))
+  //         || (de_reg.inst(RD_MSB, RD_LSB) === fd_reg.inst(RS2_MSB, RS2_LSB))
+  //     ) // And instruction in decode stage is reading the loaded value
+  // )
 
   // Kill Fetch stage
   // This means the instruction in the fetch stage will not pass to the decode stage
@@ -239,41 +239,38 @@ class Datapath(val conf: CoreConfig) extends Module {
     brCond.io.taken
   )
 
-  val pc = RegInit(Const.PC_START.U(conf.xlen.W) - 4.U(conf.xlen.W))
-  // Next Program Counter
-  val next_pc = MuxCase(
-    pc + 4.U,
-    IndexedSeq(
-      csr.io.exception -> csr.io.evec,
-      (full_stall || dec_stall) -> pc,
-      (de_reg.ctrl.pc_sel === PCSel.PC_EPC) -> csr.io.epc,
-      ((de_reg.ctrl.pc_sel === PCSel.PC_ALU) || (brCond.io.taken)) -> (alu.io.sum >> 1.U << 1.U),
-      (de_reg.ctrl.pc_sel === PCSel.PC_0) -> pc
-    )
-  )
+  // val pc = RegInit(Const.PC_START.U(conf.xlen.W) - 4.U(conf.xlen.W))
+  // // Next Program Counter
+  // val next_pc = MuxCase(
+  //   pc + 4.U,
+  //   IndexedSeq(
+  //     (fetchStage.io.full_stall || dec_stall) -> pc,
+  //     csr.io.exception -> csr.io.evec,
+  //     (de_reg.ctrl.pc_sel === PCSel.PC_EPC) -> csr.io.epc,
+  //     ((de_reg.ctrl.pc_sel === PCSel.PC_ALU) || (brCond.io.taken)) -> (alu.io.sum >> 1.U << 1.U),
+  //     (de_reg.ctrl.pc_sel === PCSel.PC_0) -> pc
+  //   )
+  // )
 
-  val inst =
-    Mux(started || csr.io.exception, Instructions.NOP, io.icache.resp.bits.data)
+  // pc := next_pc
+  // io.icache.req.bits.addr := next_pc
+  // io.icache.req.bits.data := 0.U
+  // io.icache.req.bits.mask := 0.U
+  // io.icache.req.valid := !fetchStage.io.full_stall
+  // io.icache.abort := false.B
 
-  pc := next_pc
-  io.icache.req.bits.addr := next_pc
-  io.icache.req.bits.data := 0.U
-  io.icache.req.bits.mask := 0.U
-  io.icache.req.valid := !full_stall
-  io.icache.abort := false.B
+  // // Pipelining
+  // // Only update the instruction when not stalling
+  // when(!fetchStage.io.full_stall && !dec_stall) {
+  //   fd_reg.pc := pc
+  //   when(if_kill) {
+  //     fd_reg.inst := Instructions.NOP
+  //   }.otherwise {
+  //     fd_reg.inst := inst
+  //   }
+  // }
 
-  // Pipelining
-  // Only update the instruction when not stalling
-  when(!full_stall && !dec_stall) {
-    fd_reg.pc := pc
-    when(if_kill) {
-      fd_reg.inst := Instructions.NOP
-    }.otherwise {
-      fd_reg.inst := inst
-    }
-  }
-
-  forwardingUnit.io.fd_reg := fd_reg
+  // forwardingUnit.io.fd_reg := fd_reg
 
   /**
     * *** Decode Stage ***
@@ -281,25 +278,25 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   // Connect to control signal IO
   // The instruction from the instruction memory
-  io.ctrl.inst := fd_reg.inst
+  // io.ctrl.inst := fd_reg.inst
 
-  // regFile read
-  // Register number fields from instruction
-  val dec_rd_addr = fd_reg.inst(RD_MSB, RD_LSB) // Destination Register Address
-  val dec_rs1_addr = fd_reg.inst(RS1_MSB, RS1_LSB) // Source Register 1 Address
-  val dec_rs2_addr = fd_reg.inst(RS2_MSB, RS2_LSB) // Source Register 2 Address
+  // // regFile read
+  // // Register number fields from instruction
+  // val dec_rd_addr = fd_reg.inst(RD_MSB, RD_LSB) // Destination Register Address
+  // val dec_rs1_addr = fd_reg.inst(RS1_MSB, RS1_LSB) // Source Register 1 Address
+  // val dec_rs2_addr = fd_reg.inst(RS2_MSB, RS2_LSB) // Source Register 2 Address
 
-  // Connecting register address for read
-  regFile.io.raddr1 := dec_rs1_addr
-  regFile.io.raddr2 := dec_rs2_addr
+  // // Connecting register address for read
+  // regFile.io.raddr1 := dec_rs1_addr
+  // regFile.io.raddr2 := dec_rs2_addr
 
-  // generate immediates
-  immGen.io.inst := fd_reg.inst
-  immGen.io.sel := io.ctrl.imm_sel
+  // // generate immediates
+  // immGen.io.inst := fd_reg.inst
+  // immGen.io.sel := io.ctrl.imm_sel
 
-  // Register read data values including bypass
-  val rs1 = Wire(UInt(conf.xlen.W))
-  val rs2 = Wire(UInt(conf.xlen.W))
+  // // Register read data values including bypass
+  // val rs1 = Wire(UInt(conf.xlen.W))
+  // val rs2 = Wire(UInt(conf.xlen.W))
 
   rs1 := MuxCase(
     regFile.io.rdata1,
@@ -324,81 +321,78 @@ class Datapath(val conf: CoreConfig) extends Module {
     )
   )
 
-  // Connect Pipelining Registers
+  // when(!fetchStage.io.full_stall) {
+  //   de_reg.pc := fd_reg.pc
 
-  // Get new instruction only when a branch/jump is not happening
-  val fetch_kill = (
-    de_reg.ctrl.inst_kill // Instruction needs to insert a bubble
-      || brCond.io.taken // Branch instruction executed and branch taken
-      || de_reg.ctrl.pc_sel === PCSel.PC_ALU // Jump instruction executed
-  )
+  //   when(!dec_stall && !dec_kill) {
+  //     de_reg.inst := fd_reg.inst
+  //     de_reg.ctrl := io.ctrl
 
-  when(!full_stall) {
-    de_reg.pc := fd_reg.pc
+  //     de_reg.rs1 := rs1
+  //     de_reg.rs2 := rs2
+  //     de_reg.immOut := immGen.io.out
 
-    when(!dec_stall && !dec_kill) {
-      de_reg.inst := fd_reg.inst
-      de_reg.ctrl := io.ctrl
+  //     // Mux to bypass register from writeback stage
+  //     de_reg.opA := MuxCase(
+  //       rs1,
+  //       IndexedSeq(
+  //         (io.ctrl.A_sel === ASel.A_RS1) -> rs1,
+  //         (io.ctrl.A_sel === ASel.A_PC) -> fd_reg.pc
+  //       )
+  //     )
 
-      de_reg.rs1 := rs1
-      de_reg.rs2 := rs2
-      de_reg.immOut := immGen.io.out
+  //     de_reg.opB := MuxCase(
+  //       rs2,
+  //       IndexedSeq(
+  //         (io.ctrl.B_sel === BSel.B_RS2) -> rs2,
+  //         (io.ctrl.B_sel === BSel.B_IMM) -> immGen.io.out
+  //       )
+  //     )
 
-      // Mux to bypass register from writeback stage
-      de_reg.opA := MuxCase(
-        rs1,
-        IndexedSeq(
-          (io.ctrl.A_sel === ASel.A_RS1) -> rs1,
-          (io.ctrl.A_sel === ASel.A_PC) -> fd_reg.pc
-        )
-      )
+  //   }.otherwise {
+  //     // Insert NOP when Decode is stalled
+  //     // Advance instruction from Fetch stage
 
-      de_reg.opB := MuxCase(
-        rs2,
-        IndexedSeq(
-          (io.ctrl.B_sel === BSel.B_RS2) -> rs2,
-          (io.ctrl.B_sel === BSel.B_IMM) -> immGen.io.out
-        )
-      )
+  //     de_reg.inst := Instructions.NOP
 
-    }.otherwise {
-      // Insert NOP when Decode is stalled
-      // Advance instruction from Fetch stage
+  //     // TODO: Find a more optimal way for this than hardcoding
+  //     // Manually hardcoded to control signals for Bubble instruction (XOR x0, x0, x0)
+  //     de_reg.ctrl := (new ControlSignals).Lit(
+  //       _.pc_sel -> PCSel.PC_4,
+  //       _.A_sel -> ASel.A_RS1,
+  //       _.B_sel -> BSel.B_RS2,
+  //       _.imm_sel -> ImmSel.IMM_X,
+  //       _.alu_op -> AluSel.ALU_XOR,
+  //       _.br_type -> BrType.BR_XXX,
+  //       _.inst_kill -> N.asUInt.asBool,
+  //       _.pipeline_kill -> N.asUInt.asBool,
+  //       _.st_type -> StType.ST_XXX,
+  //       _.ld_type -> LdType.LD_XXX,
+  //       _.wb_sel -> WbSel.WB_ALU,
+  //       _.wb_en -> Y.asUInt.asBool,
+  //       _.csr_cmd -> CSR.N,
+  //       _.illegal -> N
+  //     )
 
-      de_reg.inst := Instructions.NOP
+  //     de_reg.rs1 := 0.U
+  //     de_reg.rs2 := 0.U
+  //     de_reg.immOut := 0.U
+  //     de_reg.opA := 0.U
+  //     de_reg.opB := 0.U
 
-      // TODO: Find a more optimal way for this than hardcoding
-      // Manually hardcoded to control signals for Bubble instruction (XOR x0, x0, x0)
-      de_reg.ctrl := (new ControlSignals).Lit(
-        _.pc_sel -> PCSel.PC_4,
-        _.A_sel -> ASel.A_RS1,
-        _.B_sel -> BSel.B_RS2,
-        _.imm_sel -> ImmSel.IMM_X,
-        _.alu_op -> AluSel.ALU_XOR,
-        _.br_type -> BrType.BR_XXX,
-        _.inst_kill -> N.asUInt.asBool,
-        _.pipeline_kill -> N.asUInt.asBool,
-        _.st_type -> StType.ST_XXX,
-        _.ld_type -> LdType.LD_XXX,
-        _.wb_sel -> WbSel.WB_ALU,
-        _.wb_en -> Y.asUInt.asBool,
-        _.csr_cmd -> CSR.N,
-        _.illegal -> N
-      )
+  //   }
+  // }
 
-      de_reg.rs1 := 0.U
-      de_reg.rs2 := 0.U
-      de_reg.immOut := 0.U
-      de_reg.opA := 0.U
-      de_reg.opB := 0.U
+  // val de_rs1_addr = de_reg.inst(RS1_MSB, RS1_LSB)
+  // val de_rs2_addr = de_reg.inst(RS2_MSB, RS2_LSB)
 
-    }
-  }
+  // forwardingUnit.io.de_reg := de_reg
 
-  val de_rs1_addr = de_reg.inst(RS1_MSB, RS1_LSB)
-  val de_rs2_addr = de_reg.inst(RS2_MSB, RS2_LSB)
+  val fetchStage = Module(new FetchStage(conf))
+  val decodeStage = Module(new DecodeStage(conf))
 
-  forwardingUnit.io.de_reg := de_reg
+  val fd_reg = fetchStage.io.fd_reg
+  val de_reg = decodeStage.io.de_reg
 
   /**
     * *** Execute Stage ***
@@ -470,9 +464,9 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   // Pipelining
   // Kill instruction in execute
-  val execute_kill = csr.io.exception
+  val execute_kill = MemoryStage.io.csr.exception
 
-  when(reset.asBool || (!full_stall && execute_kill)) {
+  when(reset.asBool || !full_stall && execute_kill) {
     pc_check := false.B
     illegal := false.B
 
@@ -535,7 +529,7 @@ class Datapath(val conf: CoreConfig) extends Module {
   )
 
   // CSR access -----------------------------VERIFY CSR EXECUTE / MEMORY PIPELINE ACCESS BELOW
-  csr.io.stall := full_stall
+  csr.io.stall := fetchStage.io.full_stall
   csr.io.in := em_reg.csr_in
   csr.io.cmd := em_reg.ctrl.csr_cmd
   csr.io.inst := em_reg.inst
@@ -551,12 +545,13 @@ class Datapath(val conf: CoreConfig) extends Module {
   csr.io.host.fromhost.bits := 0.U
   csr.io.host.fromhost.valid := false.B
 
-  val memReqValid = !full_stall && (de_reg.ctrl.st_type.asUInt.orR || de_reg.ctrl.ld_type.asUInt.orR)
+  val memReqValid =
+    !full_stall && (DecodeStage.io.de_reg.ctrl.st_type.asUInt.orR || DecodeStage.io.de_reg.ctrl.ld_type.asUInt.orR)
 
   val wb_rd_addr = mw_reg.inst(RD_MSB, RD_LSB)
 
   // D$ access
-  val daddr = Mux(full_stall, em_reg.alu, alu.io.sum) >> 2.U << 2.U
+  val daddr = Mux(fetchStage.io.full_stall, em_reg.alu, alu.io.sum) >> 2.U << 2.U
   val woffset = (alu.io.sum(1) << 4.U).asUInt | (alu.io.sum(0) << 3.U).asUInt
 
   val tohost_reg = Reg(UInt(conf.xlen.W))
@@ -574,11 +569,11 @@ class Datapath(val conf: CoreConfig) extends Module {
   }
 
   // Note the request being made when the instruction is in the previous stage
-  io.dcache.req.valid := memReqValid
+  io.dcache.req.valid := !full_stall && (de_reg.ctrl.st_type.asUInt.orR || de_reg.ctrl.ld_type.asUInt.orR)
   io.dcache.req.bits.addr := daddr
   io.dcache.req.bits.data := ex_rs2 << woffset
   io.dcache.req.bits.mask := MuxLookup(
-    Mux(full_stall, em_reg.ctrl.st_type, de_reg.ctrl.st_type).asUInt,
+    Mux(fetchStage.io.full_stall, em_reg.ctrl.st_type, de_reg.ctrl.st_type).asUInt,
     "b0000".U,
     Seq(
       StType.ST_SW.asUInt -> "b1111".U,
@@ -604,11 +599,11 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   // add pipeline stage -- ALUOut, Inst, ctrl
   // Pipelining
-  when(reset.asBool || !full_stall && csr.io.exception) {
+  when(reset.asBool || !fetchStage.io.full_stall && csr.io.exception) {
     pc_check := false.B
     illegal := false.B
 
-  }.elsewhen(!full_stall && !csr.io.exception) {
+  }.elsewhen(!fetchStage.io.full_stall && !csr.io.exception) {
     mw_reg.pc := em_reg.pc
     mw_reg.inst := em_reg.inst
     mw_reg.ctrl := em_reg.ctrl
@@ -645,7 +640,7 @@ class Datapath(val conf: CoreConfig) extends Module {
       em_reg.pc,
       wb_rd_addr,
       regWrite,
-      em_reg.ctrl.wb_en && !full_stall && !csr.io.exception,
+      em_reg.ctrl.wb_en && !fetchStage.io.full_stall && !csr.io.exception,
       em_reg.inst(RS1_MSB, RS1_LSB), // RS1 address
       RegNext(de_reg.opA),
       em_reg.inst(RS2_MSB, RS2_LSB), // RS2 address
