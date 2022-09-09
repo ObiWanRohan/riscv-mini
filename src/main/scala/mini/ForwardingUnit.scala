@@ -28,7 +28,7 @@ object ForwardExeOperand extends ChiselEnum {
 
 class ForwardingUnitIO(width: Int) extends Bundle {
 
-  import mini.{
+  import mini.Datapath.{
     DecodeExecutePipelineRegister,
     ExecuteMemoryPipelineRegister,
     FetchDecodePipelineRegister,

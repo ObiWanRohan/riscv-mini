@@ -390,9 +390,14 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   val fetchStage = Module(new FetchStage(conf))
   val decodeStage = Module(new DecodeStage(conf))
+  val executeStage = Module(new ExecuteStage(conf))
+  val memoryStage = Module(new MemoryStage(conf))
+  val writebackStage = Module(new WritebackStage(conf))
 
   val fd_reg = fetchStage.io.fd_reg
   val de_reg = decodeStage.io.de_reg
+  val em_reg = executeStage.io.em_reg
+  val mw_reg = writebackStage.io.mw_reg
 
   /**
     * *** Execute Stage ***
