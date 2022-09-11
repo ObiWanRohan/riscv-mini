@@ -55,14 +55,23 @@ class ForwardingUnitIO(width: Int) extends Bundle {
 
   /* Outputs to bypass muxes
    */
-  val forward_dec_opA = Output(ForwardDecOperand())
-  val forward_dec_opB = Output(ForwardDecOperand())
+  // val forward_dec_opA = Output(ForwardDecOperand())
+  // val forward_dec_opB = Output(ForwardDecOperand())
 
-  val forward_exe_opA = Output(ForwardExeOperand())
-  val forward_exe_opB = Output(ForwardExeOperand())
-  val forward_exe_rs1 = Output(ForwardExeOperand())
-  val forward_exe_rs2 = Output(ForwardExeOperand())
+  // val forward_exe_opA = Output(ForwardExeOperand())
+  // val forward_exe_opB = Output(ForwardExeOperand())
+  // val forward_exe_rs1 = Output(ForwardExeOperand())
+  // val forward_exe_rs2 = Output(ForwardExeOperand())
 
+  val forwardSignals = Output(new Bundle {
+    val forward_dec_opA = ForwardDecOperand()
+    val forward_dec_opB = ForwardDecOperand()
+    val forward_exe_opA = ForwardExeOperand()
+    val forward_exe_opB = ForwardExeOperand()
+    val forward_exe_rs1 = ForwardExeOperand()
+    val forward_exe_rs2 = ForwardExeOperand()
+
+  })
 }
 
 class ForwardingUnit(width: Int) extends Module {
@@ -83,7 +92,7 @@ class ForwardingUnit(width: Int) extends Module {
   // This bypasses the hazard between the Decode and Writeback stage
   // // The writeback stage is writing data to the register file at the same address that we are reading in the same cycle
   // format: off
-  io.forward_dec_opA := MuxCase(
+  io.forwardSignals.forward_dec_opA := MuxCase(
     ForwardDecOperand.FWD_NONE,
     IndexedSeq(
       ( // For bypass from MEM stage to DEC (i.e forwarding the value received from EX stage).
@@ -99,7 +108,7 @@ class ForwardingUnit(width: Int) extends Module {
       ) -> ForwardDecOperand.FWD_MW
     )
   )
-  io.forward_dec_opB := MuxCase(
+  io.forwardSignals.forward_dec_opB := MuxCase(
     ForwardDecOperand.FWD_NONE,
     IndexedSeq(
       ( // For bypass from MEM stage to DEC (i.e forwarding the value received from EX stage).
@@ -120,7 +129,7 @@ class ForwardingUnit(width: Int) extends Module {
   val exe_rs1_addr = io.de_reg.inst(RS1_MSB, RS1_LSB)
   val exe_rs2_addr = io.de_reg.inst(RS2_MSB, RS2_LSB)
 
-  io.forward_exe_opA := MuxCase(
+  io.forwardSignals.forward_exe_opA := MuxCase(
     ForwardExeOperand.FWD_NONE,
     IndexedSeq(
       (
@@ -142,7 +151,7 @@ class ForwardingUnit(width: Int) extends Module {
     // when load mem into reg is follwed by use after 1 cycle delay -- decode stage -- use bypass path
     // in this style of bypass paths, how do we update the ALU.opB to have path from mem stage
   )
-  io.forward_exe_opB := MuxCase(
+  io.forwardSignals.forward_exe_opB := MuxCase(
     ForwardExeOperand.FWD_NONE,
     IndexedSeq(
       (
@@ -161,7 +170,7 @@ class ForwardingUnit(width: Int) extends Module {
     )
   )
 
-  io.forward_exe_rs1 := MuxCase(
+  io.forwardSignals.forward_exe_rs1 := MuxCase(
     ForwardExeOperand.FWD_NONE,
     IndexedSeq(
       (
@@ -178,7 +187,7 @@ class ForwardingUnit(width: Int) extends Module {
     )
   )
 
-  io.forward_exe_rs2 := MuxCase(
+  io.forwardSignals.forward_exe_rs2 := MuxCase(
     ForwardExeOperand.FWD_NONE,
     IndexedSeq(
       (
