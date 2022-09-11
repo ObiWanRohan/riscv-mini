@@ -6,11 +6,10 @@ import chisel3.experimental.BundleLiterals._
 
 import mini.common._
 import mini.common.RISCVConstants._
-import mini.{Alu, CSR, Cache, Const, CoreConfig, Instructions}
+import mini.{Alu, CSR, CacheIO, Const, Control, ControlSignals, CoreConfig, Instructions}
 
-import Control._
+import mini.Control._
 import CPUControlSignalTypes._
-import ForwardDecOperand._
 
 class FetchDecodePipelineRegister(xlen: Int) extends Bundle {
   // outputs to fetch/decode pipeline reg
@@ -23,32 +22,34 @@ class FetchDecodePipelineRegister(xlen: Int) extends Bundle {
 class FetchStageIO(xlen: Int) extends Bundle {
   val icache = Flipped(new CacheIO(xlen, xlen))
 
-  // global control signals, logic moved to main datapath
+  // global control signals, logic in main datapath
   val full_stall = Input(Bool())
   val dec_stall = Input(Bool())
   val if_kill = Input(Bool())
   val dec_kill = Input(Bool())
 
   // Inputs used by the fetch stage from other stages
-  val csr_epc = Input(UInt(xlen.W))
-  val csr_evec = Input(UInt(xlen.W))
-  val brCond_taken = Input(Bool())
-  val alu_sum = Input(UInt(xlen.W))
+  val de_reg = Input(new DecodeExecutePipelineRegister(xlen))
+  val csr = Input(new Bundle {
+    val epc = UInt(xlen.W)
+    val evec = UInt(xlen.W)
+    val exception = Bool()
+  })
+  val brCond = Input(new Bundle {
+    val taken = Bool()
+  })
+  val alu = Input(new Bundle {
+    val sum = UInt(xlen.W)
+  })
 
   val fd_reg = Output(new FetchDecodePipelineRegister(xlen))
-  val de_reg = Input(new DecodeExecutePipelineRegister(xlen))
-//   add other IO ports to the fetch stage -- forwarding unit, ctrl, brCond, etc
+// TODO:  add other IO ports to the fetch stage -- forwarding unit, ctrl, brCond, etc
 
 }
 
 class FetchStage(val conf: CoreConfig) extends Module {
   val io = IO(new FetchStageIO(conf.xlen))
   val started = RegNext(reset.asBool)
-
-  io.brCond_taken := BrCondIO.brCond_taken
-  io.alu_sum := AluIO.sum
-  io.csr_epc := CSRIO.epc
-  io.csr_evec := CSRIO.evec
 
   val fd_reg = RegInit(
     new FetchDecodePipelineRegister(conf.xlen)
@@ -64,9 +65,9 @@ class FetchStage(val conf: CoreConfig) extends Module {
     pc + 4.U,
     IndexedSeq(
       (io.full_stall || io.dec_stall) -> pc,
-      io.csr.exception -> io.csr_evec,
-      (io.de_reg.ctrl.pc_sel === PCSel.PC_EPC) -> io.csr_epc,
-      ((io.de_reg.ctrl.pc_sel === PCSel.PC_ALU) || (io.brCond_taken)) -> (io.alu_sum >> 1.U << 1.U),
+      io.csr.exception -> io.csr.evec,
+      (io.de_reg.ctrl.pc_sel === PCSel.PC_EPC) -> io.csr.epc,
+      ((io.de_reg.ctrl.pc_sel === PCSel.PC_ALU) || (io.brCond.taken)) -> (io.alu.sum >> 1.U << 1.U),
       (io.de_reg.ctrl.pc_sel === PCSel.PC_0) -> pc
     )
   )
@@ -91,6 +92,8 @@ class FetchStage(val conf: CoreConfig) extends Module {
       fd_reg.inst := inst
     }
   }
+
   // IO connections
   io.fd_reg := fd_reg
+
 }

@@ -6,11 +6,11 @@ import chisel3.experimental.BundleLiterals._
 
 import mini.common._
 import mini.common.RISCVConstants._
-import mini.{BrCond, Const, CoreConfig, Instructions}
+import mini.{AluSel, BrCond, CSR, Const, ControlSignals, CoreConfig, Instructions, RegFile}
 
-import Control._
+import mini.Control._
 import CPUControlSignalTypes._
-import ForwardDecOperand._
+import mini.{ForwardDecOperand, ForwardExeOperand}
 
 class DecodeExecutePipelineRegister(xlen: Int) extends Bundle {
   // outputs to de_reg
@@ -26,15 +26,39 @@ class DecodeExecutePipelineRegister(xlen: Int) extends Bundle {
 }
 
 class DecodeStageIO(xlen: Int) extends Bundle {
-  // val ctrl = Output(xlen.W)
-  // val rs1 = Output(UInt(conf.xlen.W))
-  // val rs2 = Output(UInt(conf.xlen.W))
-  val brCond_taken = Input(Bool())
 
-  val fd_reg = Input(FetchDecodePipelineRegister)
-  val em_reg = Input(ExecuteMemoryPipelineRegister)
+  val full_stall = Input(UInt(xlen.W))
+  val dec_stall = Input(Bool())
+  val if_kill = Input(Bool())
+  val dec_kill = Input(Bool())
 
-  val de_reg = Output(DecodeExecutePipelineRegister)
+  // Input from Control unit
+  val ctrl = Input(new ControlSignals())
+
+  val brCond = Input(new Bundle {
+    val taken = Bool()
+  })
+  val csr = Input(new Bundle {
+    val epc = UInt(xlen.W)
+    val evec = UInt(xlen.W)
+    val exception = Bool()
+  })
+
+  // val wb_data = Input(UInt(xlen.W))
+
+  val fd_reg = Input(new FetchDecodePipelineRegister(xlen))
+  val em_reg = Input(new ExecuteMemoryPipelineRegister(xlen))
+  val mw_reg = Input(new MemoryWritebackPipelineRegister(xlen))
+  val forwardSignals = Input(new Bundle {
+    val forward_dec_opA = ForwardDecOperand()
+    val forward_dec_opB = ForwardDecOperand()
+    val forward_exe_opA = ForwardExeOperand()
+    val forward_exe_opB = ForwardExeOperand()
+    val forward_exe_rs1 = ForwardExeOperand()
+    val forward_exe_rs2 = ForwardExeOperand()
+  })
+
+  val de_reg = Output(new DecodeExecutePipelineRegister(xlen))
 
 }
 
@@ -71,65 +95,66 @@ class DecodeStage(val conf: CoreConfig) extends Module {
     )
   )
 
-  io.brCond_taken := BrCondIO.taken;
-
-  val fd_reg = io.fd_reg
-  val de_reg = io.de_reg
-  val em_reg = io.em_reg
-
   // regFile read
   // Register number fields from instruction
-  val dec_rd_addr = fd_reg.inst(RD_MSB, RD_LSB) // Destination Register Address
-  val dec_rs1_addr = fd_reg.inst(RS1_MSB, RS1_LSB) // Source Register 1 Address
-  val dec_rs2_addr = fd_reg.inst(RS2_MSB, RS2_LSB) // Source Register 2 Address
+  val dec_rd_addr = io.fd_reg.inst(RD_MSB, RD_LSB) // Destination Register Address
+  val dec_rs1_addr = io.fd_reg.inst(RS1_MSB, RS1_LSB) // Source Register 1 Address
+  val dec_rs2_addr = io.fd_reg.inst(RS2_MSB, RS2_LSB) // Source Register 2 Address
 
   // Connecting register address for read
   regFile.io.raddr1 := dec_rs1_addr
   regFile.io.raddr2 := dec_rs2_addr
 
+  // regfile writeback
+  val wb_rd_addr = io.mw_reg.inst(RD_MSB, RD_LSB)
+  regFile.io.wen := io.mw_reg.ctrl.wb_en && !io.full_stall && !io.csr.exception
+  regFile.io.waddr := wb_rd_addr
+  regFile.io.wdata := io.mw_reg.wb_data
+
   // generate immediates
-  immGen.io.inst := fd_reg.inst
+  immGen.io.inst := io.fd_reg.inst
   immGen.io.sel := io.ctrl.imm_sel
 
   // Register read data values including bypass
-  // val rs1 = Wire(UInt(conf.xlen.W))
-  // val rs2 = Wire(UInt(conf.xlen.W))
+  val rs1 = Wire(UInt(conf.xlen.W))
+  val rs2 = Wire(UInt(conf.xlen.W))
 
-  de_reg.rs1 := MuxCase(
+  rs1 := MuxCase(
     regFile.io.rdata1,
     IndexedSeq(
       // Forward from MEM/WB stage register
-      (forwardingUnit.io.forward_dec_opA === ForwardDecOperand.FWD_MW) -> regWrite,
+      (io.forwardSignals.forward_dec_opA === ForwardDecOperand.FWD_MW) -> io.mw_reg.wb_data,
       // Forward from EX/MEM stage register
-      (forwardingUnit.io.forward_dec_opA === ForwardDecOperand.FWD_EM) -> em_reg.alu,
+      (io.forwardSignals.forward_dec_opA === ForwardDecOperand.FWD_EM) -> io.em_reg.alu,
       // No forwarding
-      (forwardingUnit.io.forward_dec_opA === ForwardDecOperand.FWD_NONE) -> regFile.io.rdata1
+      (io.forwardSignals.forward_dec_opA === ForwardDecOperand.FWD_NONE) -> regFile.io.rdata1
     )
   )
-  de_reg.rs2 := MuxCase(
+  rs2 := MuxCase(
     regFile.io.rdata2,
     IndexedSeq(
       // Forward from MEM/WB stage register
-      (forwardingUnit.io.forward_dec_opB === ForwardDecOperand.FWD_MW) -> regWrite,
+      (io.forwardSignals.forward_dec_opB === ForwardDecOperand.FWD_MW) -> io.mw_reg.wb_data,
       // Forward from EX/MEM stage register
-      (forwardingUnit.io.forward_dec_opB === ForwardDecOperand.FWD_EM) -> em_reg.alu,
+      (io.forwardSignals.forward_dec_opB === ForwardDecOperand.FWD_EM) -> io.em_reg.alu,
       // No forwarding
-      (forwardingUnit.io.forward_dec_opB === ForwardDecOperand.FWD_NONE) -> regFile.io.rdata2
+      (io.forwardSignals.forward_dec_opB === ForwardDecOperand.FWD_NONE) -> regFile.io.rdata2
     )
   )
 
+  // TODO: Not used, remove later
   // Get new instruction only when a branch/jump is not happening
-  val fetch_kill = (
-    de_reg.ctrl.inst_kill // Instruction needs to insert a bubble
-      || brCond.io.taken // Branch instruction executed and branch taken
-      || de_reg.ctrl.pc_sel === PCSel.PC_ALU // Jump instruction executed
-  )
+  // val fetch_kill = (
+  //   de_reg.ctrl.inst_kill // Instruction needs to insert a bubble
+  //     || brCond.io.taken // Branch instruction executed and branch taken
+  //     || de_reg.ctrl.pc_sel === PCSel.PC_ALU // Jump instruction executed
+  // )
 
-  when(!full_stall) {
-    de_reg.pc := fd_reg.pc
+  when(!io.full_stall) {
+    de_reg.pc := io.fd_reg.pc
 
-    when(!dec_stall && !dec_kill) {
-      de_reg.inst := fd_reg.inst
+    when(!io.dec_stall && !io.dec_kill) {
+      de_reg.inst := io.fd_reg.inst
       de_reg.ctrl := io.ctrl
 
       de_reg.rs1 := rs1
@@ -141,7 +166,7 @@ class DecodeStage(val conf: CoreConfig) extends Module {
         rs1,
         IndexedSeq(
           (io.ctrl.A_sel === ASel.A_RS1) -> rs1,
-          (io.ctrl.A_sel === ASel.A_PC) -> fd_reg.pc
+          (io.ctrl.A_sel === ASel.A_PC) -> io.fd_reg.pc
         )
       )
 
@@ -190,13 +215,13 @@ class DecodeStage(val conf: CoreConfig) extends Module {
   val de_rs1_addr = de_reg.inst(RS1_MSB, RS1_LSB)
   val de_rs2_addr = de_reg.inst(RS2_MSB, RS2_LSB)
 
-  forwardingUnit.io.de_reg := de_reg
+  // forwardingUnit.io.de_reg := de_reg
 
   // IO connections to othher modules/stages
 
   // Connect to control signal IO
   // The instruction from the instruction memory
-  io.ctrl.inst := io.fd_reg.inst
-  io.de_reg := de_reg;
+  // io.ctrl.inst := io.fd_reg.inst
+  io.de_reg := de_reg
 
 }

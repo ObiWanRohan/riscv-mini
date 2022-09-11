@@ -6,11 +6,11 @@ import chisel3.experimental.BundleLiterals._
 
 import mini.common._
 import mini.common.RISCVConstants._
-import mini.{CoreConfig, RegFile}
+import mini.{Alu, AluSel, CSR, CacheIO, ControlSignals, CoreConfig, Instructions, RegFile}
 
-import Control._
+import mini.Control._
 import CPUControlSignalTypes._
-import ForwardDecOperand._
+import mini.{ForwardDecOperand, ForwardExeOperand}
 
 class ExecuteMemoryPipelineRegister(xlen: Int) extends Bundle {
   val inst = chiselTypeOf(Instructions.NOP)
@@ -24,26 +24,79 @@ class ExecuteMemoryPipelineRegister(xlen: Int) extends Bundle {
 }
 
 class ExecuteStageIO(xlen: Int) extends Bundle {
+  val full_stall = Input(Bool())
+
   val de_reg = Input(new DecodeExecutePipelineRegister(xlen))
+  val mw_reg = Input(new MemoryWritebackPipelineRegister(xlen))
+
+  val csr = Input(new Bundle {
+    val epc = UInt(xlen.W)
+    val evec = UInt(xlen.W)
+    val exception = Bool()
+  })
+
+  val forwardSignals = Input(new Bundle {
+    val forward_dec_opA = ForwardDecOperand()
+    val forward_dec_opB = ForwardDecOperand()
+    val forward_exe_opA = ForwardExeOperand()
+    val forward_exe_opB = ForwardExeOperand()
+    val forward_exe_rs1 = ForwardExeOperand()
+    val forward_exe_rs2 = ForwardExeOperand()
+  })
 
   val illegal = Output(Bool())
   val pc_check = Output(Bool())
   val em_reg = Output(new ExecuteMemoryPipelineRegister(xlen))
 
+  val brCond = Output(new Bundle {
+    val taken = Bool()
+  })
+
+  // TODO : Output this from a register to reduce critical path
+  val ex_rs2 = Output(UInt(xlen.W))
+  val alu = Output(new Bundle {
+    val sum = UInt(xlen.W)
+  })
+
 }
 
 class ExecuteStage(val conf: CoreConfig) extends Module {
-
-  val io = IO(new DecodeStageIO(conf.xlen))
+  val io = IO(new ExecuteStageIO(conf.xlen))
 
   // Instanciating modules needed in execute stage
-  val alu = Module(conf.makeImmGen(conf.xlen))
+  val alu = Module(conf.makeAlu(conf.xlen))
   val brCond = Module(conf.makeBrCond(conf.xlen))
 
-  val de_reg = io.de_reg
-  val illegal = io.illegal
-  val pc_check = io.pc_check
-  val em_reg = io.em_reg
+  val em_reg = RegInit(
+    new ExecuteMemoryPipelineRegister(conf.xlen).Lit(
+      // TODO:
+      // give default values .defaults()
+      _.inst -> Instructions.NOP,
+      _.pc -> 0.U,
+      _.alu -> 0.U,
+      _.rs2 -> 0.U,
+      // _.dcache_out -> 0.S,
+      _.ctrl -> (new ControlSignals).Lit(
+        _.pc_sel -> PCSel.PC_4,
+        _.A_sel -> ASel.A_RS1,
+        _.B_sel -> BSel.B_RS2,
+        _.imm_sel -> ImmSel.IMM_X,
+        _.alu_op -> AluSel.ALU_XOR,
+        _.br_type -> BrType.BR_XXX,
+        _.inst_kill -> N.asUInt.asBool,
+        _.pipeline_kill -> N.asUInt.asBool,
+        _.st_type -> StType.ST_XXX,
+        _.ld_type -> LdType.LD_XXX,
+        _.wb_sel -> WbSel.WB_ALU,
+        _.wb_en -> Y.asUInt.asBool,
+        _.csr_cmd -> CSR.N,
+        _.illegal -> N
+      )
+    )
+  )
+
+  // val illegal = io.illegal
+  // val pc_check = io.pc_check
 
   // ctrl^c ctrl^v
   val ex_alu_opA = Wire(UInt(conf.xlen.W))
@@ -52,82 +105,112 @@ class ExecuteStage(val conf: CoreConfig) extends Module {
   val ex_rs2 = Wire(UInt(conf.xlen.W))
 
   ex_alu_opA := MuxLookup(
-    forwardingUnit.io.forward_exe_opA.asUInt,
-    de_reg.opA,
+    io.forwardSignals.forward_exe_opA.asUInt,
+    io.de_reg.opA,
     IndexedSeq(
       // This should be the highest priority since it has the latest result
       ForwardExeOperand.FWD_EM.asUInt -> em_reg.alu,
       // Forward from MEM/WB stage register
-      ForwardExeOperand.FWD_MW.asUInt -> regWrite,
-      ForwardExeOperand.FWD_NONE.asUInt -> de_reg.opA
+      ForwardExeOperand.FWD_MW.asUInt -> io.mw_reg.wb_data,
+      ForwardExeOperand.FWD_NONE.asUInt -> io.de_reg.opA
     )
   )
   ex_alu_opB := MuxLookup(
-    forwardingUnit.io.forward_exe_opB.asUInt,
-    de_reg.opB,
+    io.forwardSignals.forward_exe_opB.asUInt,
+    io.de_reg.opB,
     IndexedSeq(
       // Forward from MEM/WB stage register
       ForwardExeOperand.FWD_EM.asUInt -> em_reg.alu,
-      ForwardExeOperand.FWD_MW.asUInt -> regWrite,
-      ForwardExeOperand.FWD_NONE.asUInt -> de_reg.opB
+      ForwardExeOperand.FWD_MW.asUInt -> io.mw_reg.wb_data,
+      ForwardExeOperand.FWD_NONE.asUInt -> io.de_reg.opB
     )
   )
 
-  ex_rs1 := MuxCase(
-    de_reg.rs1,
+  ex_rs1 := MuxLookup(
+    io.forwardSignals.forward_exe_rs1.asUInt,
+    io.de_reg.rs1,
     IndexedSeq(
+      // This is the highest priority since it has the latest result
+      // Forward from EX/MEM stage register
+      ForwardExeOperand.FWD_EM.asUInt -> em_reg.alu,
       // Forward from MEM/WB stage register
-      (forwardingUnit.io.forward_exe_rs1 === ForwardExeOperand.FWD_MW) -> regWrite,
-      (forwardingUnit.io.forward_exe_rs1 === ForwardExeOperand.FWD_EM) -> em_reg.alu,
-      (forwardingUnit.io.forward_exe_rs1 === ForwardExeOperand.FWD_NONE) -> de_reg.rs1
+      ForwardExeOperand.FWD_MW.asUInt -> io.mw_reg.wb_data,
+      ForwardExeOperand.FWD_NONE.asUInt -> io.de_reg.rs1
     )
   )
 
-  ex_rs2 := MuxCase(
-    de_reg.rs2,
+  ex_rs2 := MuxLookup(
+    io.forwardSignals.forward_exe_rs2.asUInt,
+    io.de_reg.rs2,
     IndexedSeq(
+      // This is the highest priority since it has the latest result
+      // Forward from EX/MEM stage register
+      ForwardExeOperand.FWD_EM.asUInt -> em_reg.alu,
       // Forward from MEM/WB stage register
-      (forwardingUnit.io.forward_exe_rs2 === ForwardExeOperand.FWD_MW) -> regWrite,
-      (forwardingUnit.io.forward_exe_rs2 === ForwardExeOperand.FWD_EM) -> em_reg.alu,
-      (forwardingUnit.io.forward_exe_rs2 === ForwardExeOperand.FWD_NONE) -> de_reg.rs2
+      ForwardExeOperand.FWD_MW.asUInt -> io.mw_reg.wb_data,
+      ForwardExeOperand.FWD_NONE.asUInt -> io.de_reg.rs2
     )
   )
   alu.io.A := ex_alu_opA
   alu.io.B := ex_alu_opB
 
-  alu.io.alu_op := de_reg.ctrl.alu_op
+  alu.io.alu_op := io.de_reg.ctrl.alu_op
 
   // Branch condition calc
   brCond.io.rs1 := ex_rs1
   brCond.io.rs2 := ex_rs2
-  brCond.io.br_type := de_reg.ctrl.br_type
+  brCond.io.br_type := io.de_reg.ctrl.br_type
 
   // Pipelining
+  // Kill instruction in execute
+  val execute_kill = io.csr.exception
 
-  when(reset.asBool || !fetchStage.io.full_stall && csr.io.exception) {
-    pc_check := false.B
-    illegal := false.B
+  when(reset.asBool || !io.full_stall && execute_kill) {
+    io.pc_check := false.B
+    io.illegal := false.B
 
-  }.elsewhen(!fetchStage.io.full_stall && !csr.io.exception) {
-    em_reg.pc := de_reg.pc
-    em_reg.inst := de_reg.inst
-    em_reg.ctrl := de_reg.ctrl
-    em_reg.rs2 := de_reg.rs2
+    em_reg.pc := 0.U
+    em_reg.inst := Instructions.NOP
+    em_reg.ctrl := (new ControlSignals).Lit(
+      _.pc_sel -> PCSel.PC_4,
+      _.A_sel -> ASel.A_RS1,
+      _.B_sel -> BSel.B_RS2,
+      _.imm_sel -> ImmSel.IMM_X,
+      _.alu_op -> AluSel.ALU_XOR,
+      _.br_type -> BrType.BR_XXX,
+      _.inst_kill -> N.asUInt.asBool,
+      _.pipeline_kill -> N.asUInt.asBool,
+      _.st_type -> StType.ST_XXX,
+      _.ld_type -> LdType.LD_XXX,
+      _.wb_sel -> WbSel.WB_ALU,
+      _.wb_en -> Y.asUInt.asBool,
+      _.csr_cmd -> CSR.N,
+      _.illegal -> N
+    )
+    em_reg.rs2 := 0.U
+    em_reg.alu := 0.U
+    em_reg.csr_in := 0.U
+
+  }.elsewhen(!io.full_stall && !execute_kill) {
+    em_reg.pc := io.de_reg.pc
+    em_reg.inst := io.de_reg.inst
+    em_reg.ctrl := io.de_reg.ctrl
+    em_reg.rs2 := io.de_reg.rs2
     em_reg.alu := alu.io.out
 
-    illegal := de_reg.ctrl.illegal
+    io.illegal := io.de_reg.ctrl.illegal
 
-    // ew_reg.csr_in := Mux(de_reg.ctrl.imm_sel === ImmSel.IMM_Z, de_reg.immOut, de_reg.opA)
+    // ew_reg.csr_in := Mux(io.de_reg.ctrl.imm_sel === ImmSel.IMM_Z, io.de_reg.immOut, io.de_reg.opA)
     em_reg.csr_in := alu.io.out
 
     // Might need to convert this to a wire and make it a MuxLookup
-    pc_check := de_reg.ctrl.pc_sel === PCSel.PC_ALU
+    io.pc_check := io.de_reg.ctrl.pc_sel === PCSel.PC_ALU
   }
 
-  forwardingUnit.io.em_reg := em_reg
+  // forwardingUnit.io.em_reg := em_reg
   // ctrl^c ctrl^v
 
   // IO connections for execute stafe
-  io.em_reg := em_reg;
+  io.em_reg := em_reg
 
 }
