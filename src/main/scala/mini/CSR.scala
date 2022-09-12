@@ -613,7 +613,7 @@ class CSR(val xlen: Int) extends Module {
 
   when(!io.stall) {
     when(io.exception) {
-      mepc := io.pc >> 2 << 2
+      mepc := io.pc >> 2.U << 2.U
       mcause := MuxCase(
         Cause.IllegalInst,
         IndexedSeq(
@@ -638,7 +638,11 @@ class CSR(val xlen: Int) extends Module {
         UPIE := UIE
       }
 
-      when(iaddrInvalid || laddrInvalid || saddrInvalid) { mtval := io.addr }
+      when(laddrInvalid || saddrInvalid) {
+        mtval := io.addr
+      }.elsewhen(iaddrInvalid) {
+        mtval := io.addr >> 1.U << 1.U
+      }
     }.elsewhen(isMret) {
       PRV := MPP
       MIE := MPIE
