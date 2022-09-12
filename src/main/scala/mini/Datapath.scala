@@ -544,7 +544,7 @@ class Datapath(val conf: CoreConfig) extends Module {
     em_reg.csr_in := alu.io.out
 
     // Might need to convert this to a wire and make it a MuxLookup
-    pc_check := de_reg.ctrl.pc_sel === PCSel.PC_ALU
+    pc_check := (de_reg.ctrl.pc_sel === PCSel.PC_ALU) || (brCond.io.taken)
   }
 
   forwardingUnit.io.em_reg := em_reg
