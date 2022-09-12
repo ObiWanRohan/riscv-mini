@@ -193,6 +193,12 @@ object Cause {
   val EcallFromUMode = 0x8.U
 }
 
+class CSRIOOutput(xlen: Int) extends Bundle {
+  val epc = UInt(xlen.W)
+  val evec = UInt(xlen.W)
+  val exception = Bool()
+}
+
 class CSRIO(xlen: Int) extends Bundle {
   val stall = Input(Bool())
   val cmd = Input(UInt(3.W))

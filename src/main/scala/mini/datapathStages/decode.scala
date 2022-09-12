@@ -1,4 +1,4 @@
-package mini.Datapath
+package mini.DatapathStages
 
 import chisel3._
 import chisel3.util._
@@ -6,9 +6,9 @@ import chisel3.experimental.BundleLiterals._
 
 import mini.common._
 import mini.common.RISCVConstants._
-import mini.{AluSel, BrCond, CSR, Const, ControlSignals, CoreConfig, Instructions, RegFile}
+import mini.{AluSel, BrCond, CSR, CSRIOOutput, Const, ControlSignals, CoreConfig, Instructions, RegFile}
+import mini.Control.{N, Y}
 
-import mini.Control._
 import CPUControlSignalTypes._
 import mini.{ForwardDecOperand, ForwardExeOperand}
 
@@ -38,13 +38,9 @@ class DecodeStageIO(xlen: Int) extends Bundle {
   val brCond = Input(new Bundle {
     val taken = Bool()
   })
-  val csr = Input(new Bundle {
-    val epc = UInt(xlen.W)
-    val evec = UInt(xlen.W)
-    val exception = Bool()
-  })
+  val csr = Input(new CSRIOOutput(xlen))
 
-  // val wb_data = Input(UInt(xlen.W))
+  val writeback = Input(new WritebackRegIO(xlen))
 
   val fd_reg = Input(new FetchDecodePipelineRegister(xlen))
   val em_reg = Input(new ExecuteMemoryPipelineRegister(xlen))
@@ -83,12 +79,12 @@ class DecodeStage(val conf: CoreConfig) extends Module {
         _.imm_sel -> ImmSel.IMM_X,
         _.alu_op -> AluSel.ALU_XOR,
         _.br_type -> BrType.BR_XXX,
-        _.inst_kill -> N.asUInt.asBool,
-        _.pipeline_kill -> N.asUInt.asBool,
+        _.inst_kill -> N,
+        _.pipeline_kill -> N,
         _.st_type -> StType.ST_XXX,
         _.ld_type -> LdType.LD_XXX,
         _.wb_sel -> WbSel.WB_ALU,
-        _.wb_en -> Y.asUInt.asBool,
+        _.wb_en -> Y,
         _.csr_cmd -> CSR.N,
         _.illegal -> N
       )
@@ -105,11 +101,13 @@ class DecodeStage(val conf: CoreConfig) extends Module {
   regFile.io.raddr1 := dec_rs1_addr
   regFile.io.raddr2 := dec_rs2_addr
 
-  // regfile writeback
-  val wb_rd_addr = io.mw_reg.inst(RD_MSB, RD_LSB)
-  regFile.io.wen := io.mw_reg.ctrl.wb_en && !io.full_stall && !io.csr.exception
-  regFile.io.waddr := wb_rd_addr
-  regFile.io.wdata := io.mw_reg.wb_data
+  // regFile.io.wen := io.mw_reg.ctrl.wb_en && !io.full_stall && !io.csr.exception
+  // regFile.io.waddr := wb_rd_addr
+  // regFile.io.wdata := io.mw_reg.wb_data
+
+  regFile.io.wen := io.writeback.en && !io.full_stall && !io.csr.exception
+  regFile.io.waddr := io.writeback.rd_addr
+  regFile.io.wdata := io.writeback.data
 
   // generate immediates
   immGen.io.inst := io.fd_reg.inst
@@ -193,12 +191,12 @@ class DecodeStage(val conf: CoreConfig) extends Module {
         _.imm_sel -> ImmSel.IMM_X,
         _.alu_op -> AluSel.ALU_XOR,
         _.br_type -> BrType.BR_XXX,
-        _.inst_kill -> N.asUInt.asBool,
-        _.pipeline_kill -> N.asUInt.asBool,
+        _.inst_kill -> N,
+        _.pipeline_kill -> N,
         _.st_type -> StType.ST_XXX,
         _.ld_type -> LdType.LD_XXX,
         _.wb_sel -> WbSel.WB_ALU,
-        _.wb_en -> Y.asUInt.asBool,
+        _.wb_en -> Y,
         _.csr_cmd -> CSR.N,
         _.illegal -> N
       )

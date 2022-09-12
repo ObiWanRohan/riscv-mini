@@ -1,4 +1,4 @@
-package mini.Datapath
+package mini.DatapathStages
 
 import chisel3._
 import chisel3.util._
@@ -6,9 +6,9 @@ import chisel3.experimental.BundleLiterals._
 
 import mini.common._
 import mini.common.RISCVConstants._
-import mini.{Alu, AluSel, CSR, CSRIO, Cache, CacheIO, Const, ControlSignals, CoreConfig, Instructions}
+import mini.{Alu, AluSel, CSR, CSRIOOutput, Cache, CacheIO, Const, ControlSignals, CoreConfig, HostIO, Instructions}
+import mini.Control.{N, Y}
 
-import mini.Control._
 import CPUControlSignalTypes._
 import mini.ForwardDecOperand._
 
@@ -35,14 +35,10 @@ class MemoryStageIO(xlen: Int) extends Bundle {
     val sum = UInt(xlen.W)
   })
 
-  val pc_check = Input(Bool())
-  val illegal = Input(Bool())
+  val illegal = Output(Bool())
 
-  val host = Output(new Bundle {
-    val tohost = UInt(xlen.W)
-    val fromhost = UInt(xlen.W)
-  })
-  val csr = Output(new CSRIO(xlen))
+  val host = (new HostIO(xlen))
+  val csr = Output(new CSRIOOutput(xlen))
   val mw_reg = Output(new MemoryWritebackPipelineRegister(xlen))
 }
 
@@ -56,25 +52,28 @@ class MemoryStage(val conf: CoreConfig) extends Module {
       _.pc -> 0.U,
       _.wb_data -> 0.U,
       _.rs2 -> 0.U,
-      _.dcache_out -> 0.S,
-      _.ctrl -> (new ControlSignals).Lit(
-        _.pc_sel -> PCSel.PC_4,
-        _.A_sel -> ASel.A_RS1,
-        _.B_sel -> BSel.B_RS2,
-        _.imm_sel -> ImmSel.IMM_X,
-        _.alu_op -> AluSel.ALU_XOR,
-        _.br_type -> BrType.BR_XXX,
-        _.inst_kill -> N.asUInt.asBool,
-        _.pipeline_kill -> N.asUInt.asBool,
-        _.st_type -> StType.ST_XXX,
-        _.ld_type -> LdType.LD_XXX,
-        _.wb_sel -> WbSel.WB_ALU,
-        _.wb_en -> Y.asUInt.asBool,
-        _.csr_cmd -> CSR.N,
-        _.illegal -> N
-      )
+      _.dcache_out -> 0.S
+      // _.ctrl -> (new ControlSignals).Lit(
+      //   _.pc_sel -> PCSel.PC_4,
+      //   _.A_sel -> ASel.A_RS1,
+      //   _.B_sel -> BSel.B_RS2,
+      //   _.imm_sel -> ImmSel.IMM_X,
+      //   _.alu_op -> AluSel.ALU_XOR,
+      //   _.br_type -> BrType.BR_XXX,
+      //   _.inst_kill -> N,
+      //   _.pipeline_kill -> N,
+      //   _.st_type -> StType.ST_XXX,
+      //   _.ld_type -> LdType.LD_XXX,
+      //   _.wb_sel -> WbSel.WB_ALU,
+      //   _.wb_en -> Y,
+      //   _.csr_cmd -> CSR.N,
+      //   _.illegal -> N
+      // )
     )
   )
+
+  val pc_check = RegInit(false.B)
+  val illegal = RegInit(false.B)
 
   val regWrite = Wire(UInt(conf.xlen.W))
   val load = Wire(SInt(conf.xlen.W))
@@ -98,8 +97,8 @@ class MemoryStage(val conf: CoreConfig) extends Module {
   csr.io.inst := io.em_reg.inst
   csr.io.pc := io.em_reg.pc
   csr.io.addr := io.em_reg.alu
-  csr.io.illegal := io.illegal
-  csr.io.pc_check := io.pc_check
+  csr.io.illegal := illegal
+  csr.io.pc_check := pc_check
   csr.io.ld_type := io.em_reg.ctrl.ld_type
   csr.io.st_type := io.em_reg.ctrl.st_type
 
@@ -116,16 +115,11 @@ class MemoryStage(val conf: CoreConfig) extends Module {
   val woffset = (io.alu.sum(1) << 4.U).asUInt | (io.alu.sum(0) << 3.U).asUInt
 
   val tohost_reg = Reg(UInt(conf.xlen.W))
-  val tohost_mem_req = memReqValid && io.de_reg.ctrl.st_type.asUInt.orR && daddr === Const.HOST_ADDR.U
-
-  // Use data from memory if the memory request was valid in the previous cycle
-  // i.e the data is being written in the current cycle. Otherwise send data from CSR
-  io.host.tohost := Mux(RegNext(tohost_mem_req), tohost_reg, csr.io.host.tohost)
-  // io.host.tohost := 0.U
+  val tohost_mem_req = memReqValid && io.de_reg.ctrl.st_type.asUInt.orR && (daddr === Const.HOST_ADDR.U)
 
   // Writing to host IO
   when(tohost_mem_req) {
-    // TODO: add mask here
+    // TODO: add mask here for different kinds of stores
     // TODO: can we use the value from pipeline reg??
     tohost_reg := io.ex_rs2
   }
@@ -143,7 +137,7 @@ class MemoryStage(val conf: CoreConfig) extends Module {
       StType.ST_SB.asUInt -> ("b1".U << io.alu.sum(1, 0))
     )
   )
-  // Abort store when there's an excpetion
+  // Abort store when there's an exception
   io.dcache.abort := csr.io.exception
 
   // forwardingUnit.io.mw_reg := mw_reg
@@ -162,8 +156,8 @@ class MemoryStage(val conf: CoreConfig) extends Module {
   // add pipeline stage -- ALUOut, Inst, ctrl
   // Pipelining
   when(reset.asBool || !io.full_stall && csr.io.exception) {
-    io.pc_check := false.B
-    io.illegal := false.B
+    pc_check := false.B
+    illegal := false.B
 
   }.elsewhen(!io.full_stall && !csr.io.exception) {
     mw_reg.pc := io.em_reg.pc
@@ -175,13 +169,21 @@ class MemoryStage(val conf: CoreConfig) extends Module {
 
     mw_reg.dcache_out := load
 
-    mw_reg := io.mw_reg
     io.csr := csr.io
     // io.em_reg.csr_in := alu.io.out
 
-    io.illegal := io.de_reg.ctrl.illegal
+    illegal := io.de_reg.ctrl.illegal
 
     // Might need to convert this to a wire and make it a MuxLookup
-    io.pc_check := io.de_reg.ctrl.pc_sel === PCSel.PC_ALU
+    pc_check := io.de_reg.ctrl.pc_sel === PCSel.PC_ALU
   }
+
+  // Use data from memory if the memory request was valid in the previous cycle
+  // i.e the data is being written in the current cycle. Otherwise send data from CSR
+  io.host.tohost := Mux(RegNext(tohost_mem_req), tohost_reg, csr.io.host.tohost)
+
+  io.mw_reg := mw_reg
+  io.illegal := illegal
+  io.csr := csr.io
+
 }

@@ -1,4 +1,4 @@
-package mini.Datapath
+package mini.DatapathStages
 
 import chisel3._
 import chisel3.util._
@@ -6,9 +6,8 @@ import chisel3.experimental.BundleLiterals._
 
 import mini.common._
 import mini.common.RISCVConstants._
-import mini.{Alu, CSR, CacheIO, Const, Control, ControlSignals, CoreConfig, Instructions}
+import mini.{Alu, CSR, CSRIOOutput, CacheIO, Const, Control, ControlSignals, CoreConfig, Instructions}
 
-import mini.Control._
 import CPUControlSignalTypes._
 
 class FetchDecodePipelineRegister(xlen: Int) extends Bundle {
@@ -30,11 +29,7 @@ class FetchStageIO(xlen: Int) extends Bundle {
 
   // Inputs used by the fetch stage from other stages
   val de_reg = Input(new DecodeExecutePipelineRegister(xlen))
-  val csr = Input(new Bundle {
-    val epc = UInt(xlen.W)
-    val evec = UInt(xlen.W)
-    val exception = Bool()
-  })
+  val csr = Input(new CSRIOOutput(xlen))
   val brCond = Input(new Bundle {
     val taken = Bool()
   })

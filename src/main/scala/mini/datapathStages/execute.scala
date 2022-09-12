@@ -1,4 +1,4 @@
-package mini.Datapath
+package mini.DatapathStages
 
 import chisel3._
 import chisel3.util._
@@ -6,9 +6,9 @@ import chisel3.experimental.BundleLiterals._
 
 import mini.common._
 import mini.common.RISCVConstants._
-import mini.{Alu, AluSel, CSR, CacheIO, ControlSignals, CoreConfig, Instructions, RegFile}
+import mini.{Alu, AluSel, CSR, CSRIOOutput, CacheIO, ControlSignals, CoreConfig, Instructions, RegFile}
+import mini.Control.{N, Y}
 
-import mini.Control._
 import CPUControlSignalTypes._
 import mini.{ForwardDecOperand, ForwardExeOperand}
 
@@ -29,11 +29,7 @@ class ExecuteStageIO(xlen: Int) extends Bundle {
   val de_reg = Input(new DecodeExecutePipelineRegister(xlen))
   val mw_reg = Input(new MemoryWritebackPipelineRegister(xlen))
 
-  val csr = Input(new Bundle {
-    val epc = UInt(xlen.W)
-    val evec = UInt(xlen.W)
-    val exception = Bool()
-  })
+  val csr = Input(new CSRIOOutput(xlen))
 
   val forwardSignals = Input(new Bundle {
     val forward_dec_opA = ForwardDecOperand()
@@ -44,8 +40,6 @@ class ExecuteStageIO(xlen: Int) extends Bundle {
     val forward_exe_rs2 = ForwardExeOperand()
   })
 
-  val illegal = Output(Bool())
-  val pc_check = Output(Bool())
   val em_reg = Output(new ExecuteMemoryPipelineRegister(xlen))
 
   val brCond = Output(new Bundle {
@@ -83,12 +77,12 @@ class ExecuteStage(val conf: CoreConfig) extends Module {
         _.imm_sel -> ImmSel.IMM_X,
         _.alu_op -> AluSel.ALU_XOR,
         _.br_type -> BrType.BR_XXX,
-        _.inst_kill -> N.asUInt.asBool,
-        _.pipeline_kill -> N.asUInt.asBool,
+        _.inst_kill -> N,
+        _.pipeline_kill -> N,
         _.st_type -> StType.ST_XXX,
         _.ld_type -> LdType.LD_XXX,
         _.wb_sel -> WbSel.WB_ALU,
-        _.wb_en -> Y.asUInt.asBool,
+        _.wb_en -> Y,
         _.csr_cmd -> CSR.N,
         _.illegal -> N
       )
@@ -96,7 +90,6 @@ class ExecuteStage(val conf: CoreConfig) extends Module {
   )
 
   // val illegal = io.illegal
-  // val pc_check = io.pc_check
 
   // ctrl^c ctrl^v
   val ex_alu_opA = Wire(UInt(conf.xlen.W))
@@ -166,8 +159,6 @@ class ExecuteStage(val conf: CoreConfig) extends Module {
   val execute_kill = io.csr.exception
 
   when(reset.asBool || !io.full_stall && execute_kill) {
-    io.pc_check := false.B
-    io.illegal := false.B
 
     em_reg.pc := 0.U
     em_reg.inst := Instructions.NOP
@@ -178,12 +169,12 @@ class ExecuteStage(val conf: CoreConfig) extends Module {
       _.imm_sel -> ImmSel.IMM_X,
       _.alu_op -> AluSel.ALU_XOR,
       _.br_type -> BrType.BR_XXX,
-      _.inst_kill -> N.asUInt.asBool,
-      _.pipeline_kill -> N.asUInt.asBool,
+      _.inst_kill -> N,
+      _.pipeline_kill -> N,
       _.st_type -> StType.ST_XXX,
       _.ld_type -> LdType.LD_XXX,
       _.wb_sel -> WbSel.WB_ALU,
-      _.wb_en -> Y.asUInt.asBool,
+      _.wb_en -> Y,
       _.csr_cmd -> CSR.N,
       _.illegal -> N
     )
@@ -198,13 +189,9 @@ class ExecuteStage(val conf: CoreConfig) extends Module {
     em_reg.rs2 := io.de_reg.rs2
     em_reg.alu := alu.io.out
 
-    io.illegal := io.de_reg.ctrl.illegal
-
     // ew_reg.csr_in := Mux(io.de_reg.ctrl.imm_sel === ImmSel.IMM_Z, io.de_reg.immOut, io.de_reg.opA)
     em_reg.csr_in := alu.io.out
 
-    // Might need to convert this to a wire and make it a MuxLookup
-    io.pc_check := io.de_reg.ctrl.pc_sel === PCSel.PC_ALU
   }
 
   // forwardingUnit.io.em_reg := em_reg
@@ -212,5 +199,8 @@ class ExecuteStage(val conf: CoreConfig) extends Module {
 
   // IO connections for execute stafe
   io.em_reg := em_reg
+  io.brCond := brCond.io
+  io.ex_rs2 := ex_rs2
+  io.alu := alu.io
 
 }
