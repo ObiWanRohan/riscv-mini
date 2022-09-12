@@ -197,6 +197,12 @@ object Cause {
   val EcallFromUMode = 0x8.U
 }
 
+class CSRIOOutput(xlen: Int) extends Bundle {
+  val epc = UInt(xlen.W)
+  val evec = UInt(xlen.W)
+  val exception = Bool()
+}
+
 object MISAMappings {
   val MXLEN_32 = 1.U(2.W)
   val MXLEN_64 = 2.U(2.W)

@@ -28,11 +28,12 @@ object ForwardExeOperand extends ChiselEnum {
 
 class ForwardingUnitIO(width: Int) extends Bundle {
 
-  import mini.{
+  import mini.DatapathStages.{
     DecodeExecutePipelineRegister,
     ExecuteMemoryPipelineRegister,
     FetchDecodePipelineRegister,
-    MemoryWritebackPipelineRegister
+    MemoryWritebackPipelineRegister,
+    WritebackRegIO
   }
   import CPUControlSignalTypes._
 
@@ -45,24 +46,27 @@ class ForwardingUnitIO(width: Int) extends Bundle {
 
   // Source register addresses from decode stage
 
-  // Destination register for writeback stage
-  val wb_rd = Input(UInt(REG_ADDR_WIDTH))
-  // Writeback enable control
-  val wb_en = Input(Bool())
-
-  // Writeback selector control
-  val wb_sel = Input(WbSel())
+  val writeback = Input(new WritebackRegIO(width))
 
   /* Outputs to bypass muxes
    */
-  val forward_dec_opA = Output(ForwardDecOperand())
-  val forward_dec_opB = Output(ForwardDecOperand())
+  // val forward_dec_opA = Output(ForwardDecOperand())
+  // val forward_dec_opB = Output(ForwardDecOperand())
 
-  val forward_exe_opA = Output(ForwardExeOperand())
-  val forward_exe_opB = Output(ForwardExeOperand())
-  val forward_exe_rs1 = Output(ForwardExeOperand())
-  val forward_exe_rs2 = Output(ForwardExeOperand())
+  // val forward_exe_opA = Output(ForwardExeOperand())
+  // val forward_exe_opB = Output(ForwardExeOperand())
+  // val forward_exe_rs1 = Output(ForwardExeOperand())
+  // val forward_exe_rs2 = Output(ForwardExeOperand())
 
+  val forwardSignals = Output(new Bundle {
+    val forward_dec_opA = ForwardDecOperand()
+    val forward_dec_opB = ForwardDecOperand()
+    val forward_exe_opA = ForwardExeOperand()
+    val forward_exe_opB = ForwardExeOperand()
+    val forward_exe_rs1 = ForwardExeOperand()
+    val forward_exe_rs2 = ForwardExeOperand()
+
+  })
 }
 
 class ForwardingUnit(width: Int) extends Module {
@@ -83,35 +87,35 @@ class ForwardingUnit(width: Int) extends Module {
   // This bypasses the hazard between the Decode and Writeback stage
   // // The writeback stage is writing data to the register file at the same address that we are reading in the same cycle
   // format: off
-  io.forward_dec_opA := MuxCase(
+  io.forwardSignals.forward_dec_opA := MuxCase(
     ForwardDecOperand.FWD_NONE,
     IndexedSeq(
       ( // For bypass from MEM stage to DEC (i.e forwarding the value received from EX stage).
-        io.em_reg.inst(RD_MSB, RD_LSB) === dec_rs1_addr    // The destination register is the same that is being read
-        && dec_rs1_addr.orR         // The destination register is not register x0
-        && io.em_reg.ctrl.wb_en                   // Writeback is enabled
-        && io.em_reg.ctrl.wb_sel === WbSel.WB_ALU       // We are writing the ALU value to the register
+        io.em_reg.inst(RD_MSB, RD_LSB) === dec_rs1_addr   // The destination register is the same that is being read
+        && dec_rs1_addr.orR                               // The destination register is not register x0
+        && io.em_reg.ctrl.wb_en                           // Writeback is enabled
+        && io.em_reg.ctrl.wb_sel === WbSel.WB_ALU         // We are writing the ALU value to the register
       ) -> ForwardDecOperand.FWD_EM,
       ( // For bypass from WB stage to DEC. This happens regardless of type of writeback
-        io.wb_rd === dec_rs1_addr    // The destination register is the same that is being read
-        && dec_rs1_addr.orR         // The destination register is not register x0
-        && io.wb_en                   // Writeback is enabled
+        io.writeback.rd_addr === dec_rs1_addr     // The destination register is the same that is being read
+        && dec_rs1_addr.orR                       // The destination register is not register x0
+        && io.writeback.en                        // Writeback is enabled
       ) -> ForwardDecOperand.FWD_MW
     )
   )
-  io.forward_dec_opB := MuxCase(
+  io.forwardSignals.forward_dec_opB := MuxCase(
     ForwardDecOperand.FWD_NONE,
     IndexedSeq(
       ( // For bypass from MEM stage to DEC (i.e forwarding the value received from EX stage).
-        io.em_reg.inst(RD_MSB, RD_LSB) === dec_rs2_addr    // The destination register is the same that is being read
-        && dec_rs2_addr.orR         // The destination register is not register x0
-        && io.em_reg.ctrl.wb_en                   // Writeback is enabled
-        && io.em_reg.ctrl.wb_sel === WbSel.WB_ALU       // We are writing the ALU value to the register
+        io.em_reg.inst(RD_MSB, RD_LSB) === dec_rs2_addr   // The destination register is the same that is being read
+        && dec_rs2_addr.orR                               // The destination register is not register x0
+        && io.em_reg.ctrl.wb_en                           // Writeback is enabled
+        && io.em_reg.ctrl.wb_sel === WbSel.WB_ALU         // We are writing the ALU value to the register
       ) -> ForwardDecOperand.FWD_EM,
       (
-        io.wb_rd === dec_rs2_addr      // The destination register is the same that is being read
-        && dec_rs2_addr.orR           // The destination register is not register x0
-        && io.wb_en                     // Writeback is enabled
+        io.writeback.rd_addr === dec_rs2_addr   // The destination register is the same that is being read
+        && dec_rs2_addr.orR                     // The destination register is not register x0
+        && io.writeback.en                      // Writeback is enabled
       ) -> ForwardDecOperand.FWD_MW
     )
   )
@@ -120,7 +124,7 @@ class ForwardingUnit(width: Int) extends Module {
   val exe_rs1_addr = io.de_reg.inst(RS1_MSB, RS1_LSB)
   val exe_rs2_addr = io.de_reg.inst(RS2_MSB, RS2_LSB)
 
-  io.forward_exe_opA := MuxCase(
+  io.forwardSignals.forward_exe_opA := MuxCase(
     ForwardExeOperand.FWD_NONE,
     IndexedSeq(
       (
@@ -131,9 +135,9 @@ class ForwardingUnit(width: Int) extends Module {
         && io.de_reg.ctrl.A_sel === ASel.A_RS1
       ) -> ForwardExeOperand.FWD_EM,
       (
-        io.wb_rd === exe_rs1_addr     // The destination register is the same that is being read
-        && exe_rs1_addr.orR          // The destination register is not register x0
-        && io.wb_en                   // Writeback is enabled
+        io.writeback.rd_addr === exe_rs1_addr     // The destination register is the same that is being read
+        && exe_rs1_addr.orR                       // The destination register is not register x0
+        && io.writeback.en                        // Writeback is enabled
         && io.de_reg.ctrl.A_sel === ASel.A_RS1
       ) -> ForwardExeOperand.FWD_MW
     )
@@ -142,7 +146,7 @@ class ForwardingUnit(width: Int) extends Module {
     // when load mem into reg is follwed by use after 1 cycle delay -- decode stage -- use bypass path
     // in this style of bypass paths, how do we update the ALU.opB to have path from mem stage
   )
-  io.forward_exe_opB := MuxCase(
+  io.forwardSignals.forward_exe_opB := MuxCase(
     ForwardExeOperand.FWD_NONE,
     IndexedSeq(
       (
@@ -153,15 +157,15 @@ class ForwardingUnit(width: Int) extends Module {
         && io.de_reg.ctrl.B_sel === BSel.B_RS2
         ) -> ForwardExeOperand.FWD_EM,
       (
-        io.wb_rd === exe_rs2_addr       // The destination register is the same that is being read
+        io.writeback.rd_addr === exe_rs2_addr       // The destination register is the same that is being read
         && exe_rs2_addr.orR            // The destination register is not register x0
-        && io.wb_en                     // Writeback is enabled
+        && io.writeback.en                     // Writeback is enabled
         && io.de_reg.ctrl.B_sel === BSel.B_RS2
       ) -> ForwardExeOperand.FWD_MW
     )
   )
 
-  io.forward_exe_rs1 := MuxCase(
+  io.forwardSignals.forward_exe_rs1 := MuxCase(
     ForwardExeOperand.FWD_NONE,
     IndexedSeq(
       (
@@ -171,14 +175,14 @@ class ForwardingUnit(width: Int) extends Module {
         && io.em_reg.ctrl.wb_sel === WbSel.WB_ALU   // we are writing back from memory (load)
         ) -> ForwardExeOperand.FWD_EM,
       (
-        io.wb_rd === exe_rs1_addr       // The destination register is the same that is being read
+        io.writeback.rd_addr === exe_rs1_addr       // The destination register is the same that is being read
         && exe_rs1_addr.orR            // The destination register is not register x0
-        && io.wb_en                     // Writeback is enabled
+        && io.writeback.en                     // Writeback is enabled
       ) -> ForwardExeOperand.FWD_MW
     )
   )
 
-  io.forward_exe_rs2 := MuxCase(
+  io.forwardSignals.forward_exe_rs2 := MuxCase(
     ForwardExeOperand.FWD_NONE,
     IndexedSeq(
       (
@@ -188,9 +192,9 @@ class ForwardingUnit(width: Int) extends Module {
         && io.em_reg.ctrl.wb_sel === WbSel.WB_ALU   // we are writing back from memory (load)
         ) -> ForwardExeOperand.FWD_EM,
       (
-        io.wb_rd === exe_rs2_addr       // The destination register is the same that is being read
+        io.writeback.rd_addr === exe_rs2_addr       // The destination register is the same that is being read
         && exe_rs2_addr.orR            // The destination register is not register x0
-        && io.wb_en                     // Writeback is enabled
+        && io.writeback.en                     // Writeback is enabled
       ) -> ForwardExeOperand.FWD_MW
     )
   )
