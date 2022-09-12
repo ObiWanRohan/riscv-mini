@@ -47,6 +47,8 @@ The current tests are from the [`riscv-tests`](https://github.com/riscv-software
 The riscv-tools are setup using [`chipyard`](https://github.com/ucb-bar/chipyard).
 A custom linker script has been used to set the start address to `0x200` (This is the PC_START)
 
+You can use the [`update-tests.sh`](./update-tests.sh) script to update the tests in the repository. Set the `RISCV_TESTS` and `RISCV` environment variable, and run the script. There are some changes that need to be made to the riscv-tests isa `Makefile`. Only compile the tests for `rv32ui` and `rv32mi`.
+
 ## Unit and Integration Tests with `sbt`
 
 `riscv-mini` provides synthesizable unit & integration tests.
