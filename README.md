@@ -1,11 +1,13 @@
 # riscv-mini
 
-Author: Donggyu Kim (dgkim@eecs.berkeley.edu)
+Author : Rohan Nawathe(rnawathe@outlook.com) and Aakash Gupta(aakashnareshgupta@gmail.com)
+Original Author: Donggyu Kim (dgkim@eecs.berkeley.edu)
 
-`riscv-mini` is a simple RISC-V 3-stage pipeline written in Chisel. It has been a crucial example in various project developments,
+`riscv-mini` is a simple RISC-V 5-stage pipeline written in Chisel. It was a 3 stage pipeline which we modified.
+It has been a crucial example in various project developments,
 including [Chisel3](https://github.com/ucb-bar/chisel3.git), [FIRRTL](https://github.com/ucb-bar/firrtl.git),
 [Strober](https://bar.eecs.berkeley.edu/projects/strober.html), simulation and verification methodologies.
-It implements RV32I of the User-level ISA Version 2.0 and the Machine-level ISA of the Privileged Architecture Version 1.7.
+It implements RV32I of the User-level ISA Version 2.0 and the Machine-level ISA of the Privileged Architecture Version 1.11.
 Unlike other simple pipelines, it also contains simple instruction and data caches.
 
 Note that a real-world processor is not the goal of `riscv-mini`.
@@ -40,6 +42,11 @@ The following command runs the whole test hex files in verilator and dumps the t
 
     $ make run-tests
 
+### Generating hex binary for verilator
+The current tests are from the [`riscv-tests`](https://github.com/riscv-software-src/riscv-tests) repository. They are compiled with `riscv64-unknown-elf-gcc` with `-march=rv32i` and `-mabi=ilp32` compiler options. The ELF binary are exported to hex using `elf2hex`.
+The riscv-tools are setup using [`chipyard`](https://github.com/ucb-bar/chipyard).
+A custom linker script has been used to set the start address to `0x200` (This is the PC_START)
+
 ## Unit and Integration Tests with `sbt`
 
 `riscv-mini` provides synthesizable unit & integration tests.
@@ -64,10 +71,12 @@ Finally, to run all the tests, just in sbt:
     
 ## Running Your Own Program on `riscv-mini`
 
-At this point, you may want to implement and exeucte your custom application on `riscv-mini`. In this case, you need to install RISC-V tools for priv 1.7. This repo provides a script to install the correct version of tools. Run the script as follows:
+<!-- TODO : Update this and the script -->
+At this point, you may want to implement and exeucte your custom application on `riscv-mini`. In this case, you need to install RISC-V tools for priv 1.11. 
+<!-- This repo provides a script to install the correct version of tools. Run the script as follows:
 
-    $ export RISCV=<path to riscv tools for priv 1.7>
-    $ ./build-riscv-tools
+    $ export RISCV=<path to riscv tools for priv 1.11>
+    $ ./build-riscv-tools -->
     
 It takes a while to install the toolchain, so please be patient.
 

@@ -203,17 +203,46 @@ class Datapath(val conf: CoreConfig) extends Module {
   val full_stall = !io.icache.resp.valid || !io.dcache.resp.valid
 
   // Decode Stage Stall
+  // This would stop the Fetch and Decode stages (keep the same instruction) inside.
+  // NOPs will be inserted in the Execute stage while this is asserted
   // Can also be called hazard_stall
   val dec_stall = Wire(Bool())
 
-  // Currently only stalling on load hazards
+  // format: off
   dec_stall := (
+    // Load Hazard
+    // When a Load instruction is in the Execute stage
+    // and the instruction in the Decode stage is trying to access the loaded value
     de_reg.ctrl.ld_type =/= LdType.LD_XXX // Instruction in Execute stage is a load
       && (
-        (de_reg.inst(RD_MSB, RD_LSB) === fd_reg.inst(RS1_MSB, RS1_LSB))
-          || (de_reg.inst(RD_MSB, RD_LSB) === fd_reg.inst(RS2_MSB, RS2_LSB))
+        (
+          de_reg.inst(RD_MSB, RD_LSB) === fd_reg.inst(RS1_MSB, RS1_LSB)
+        ) || (
+          de_reg.inst(RD_MSB, RD_LSB) === fd_reg.inst(RS2_MSB, RS2_LSB)
+        )
       ) // And instruction in decode stage is reading the loaded value
+  ) || (
+    // Instruction being executed is a CSR instruction
+    // Stalling here because the CSR execution happens in MEM stage and the next instruction might use the value
+    (
+      // CSR Command is one of W, S or C
+      de_reg.ctrl.csr_cmd(0) || de_reg.ctrl.csr_cmd(1)
+    ) && (
+      (
+        // Next instruction is a (M|S|U)RET
+        io.ctrl.pc_sel === PCSel.PC_EPC
+        ) || (
+        // Next instruction is reading the destination register
+        de_reg.inst(RD_MSB, RD_LSB).orR
+        && (
+            de_reg.inst(RD_MSB, RD_LSB) === fd_reg.inst(RS1_MSB, RS1_LSB)
+            || de_reg.inst(RD_MSB, RD_LSB) === fd_reg.inst(RS2_MSB, RS2_LSB)
+          )
+        )
+      )
   )
+  // || io.ctrl.fencei || RegNext(io.ctrl.fencei)
+  // format: on
 
   // Kill Fetch stage
   // This means the instruction in the fetch stage will not pass to the decode stage
@@ -224,7 +253,9 @@ class Datapath(val conf: CoreConfig) extends Module {
     csr.io.exception
   ) || (
     brCond.io.taken
-  ) // || cs_fencei || RegNext(cs_fencei) // Will add later
+  ) || (
+    started
+  )
 
   // Kill Decode stage
   // This means the instruction in the decode stage will not pass to the execute stage
@@ -245,15 +276,17 @@ class Datapath(val conf: CoreConfig) extends Module {
     pc + 4.U,
     IndexedSeq(
       csr.io.exception -> csr.io.evec,
-      (full_stall || dec_stall) -> pc,
       (de_reg.ctrl.pc_sel === PCSel.PC_EPC) -> csr.io.epc,
       ((de_reg.ctrl.pc_sel === PCSel.PC_ALU) || (brCond.io.taken)) -> (alu.io.sum >> 1.U << 1.U),
-      (de_reg.ctrl.pc_sel === PCSel.PC_0) -> pc
+      (de_reg.ctrl.pc_sel === PCSel.PC_0) -> pc,
+      (full_stall || dec_stall) -> pc,
+      // Not adding !full_stall && !dec_stall since this is a priority Mux
+      // and the above line ensures that both are non-zero.
+      (io.ctrl.fencei && de_reg.ctrl.pc_sel === PCSel.PC_4) -> pc
     )
   )
 
-  val inst =
-    Mux(started || csr.io.exception, Instructions.NOP, io.icache.resp.bits.data)
+  val inst = io.icache.resp.bits.data
 
   pc := next_pc
   io.icache.req.bits.addr := next_pc
@@ -511,7 +544,7 @@ class Datapath(val conf: CoreConfig) extends Module {
     em_reg.csr_in := alu.io.out
 
     // Might need to convert this to a wire and make it a MuxLookup
-    pc_check := de_reg.ctrl.pc_sel === PCSel.PC_ALU
+    pc_check := (de_reg.ctrl.pc_sel === PCSel.PC_ALU) || (brCond.io.taken)
   }
 
   forwardingUnit.io.em_reg := em_reg

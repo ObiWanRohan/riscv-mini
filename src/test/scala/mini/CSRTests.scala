@@ -67,7 +67,7 @@ class CSRTester(c: => CSR, trace: Boolean = false) extends BasicTester with Test
     .map(_.litValue)
     .map { addr =>
       addr -> RegInit(
-        if (addr == CSR.mcpuid.litValue) (BigInt(1) << ('I' - 'A') | BigInt(1) << ('U' - 'A')).U(xlen.W)
+        if (addr == CSR.misa.litValue) (BigInt(1) << ('I' - 'A') | BigInt(1) << ('U' - 'A')).U(xlen.W)
         else if (addr == CSR.mstatus.litValue) (CSR.PRV_M.litValue << 4 | CSR.PRV_M.litValue << 1).U(xlen.W)
         else if (addr == CSR.mtvec.litValue) Const.PC_EVEC.U(xlen.W)
         else 0.U(xlen.W)
@@ -201,7 +201,7 @@ class CSRTester(c: => CSR, trace: Boolean = false) extends BasicTester with Test
       )
     regs(CSR.mstatus.litValue) := (prv << 4.U).asUInt | (ie << 3.U).asUInt | (CSR.PRV_M << 1.U).asUInt | 0.U
     when(iaddr_invalid || laddr_invalid || saddr_invalid) {
-      regs(CSR.mbadaddr.litValue) := dut.io.addr
+      regs(CSR.mtval.litValue) := dut.io.addr
     }
   }.elsewhen(is_eret) {
     regs(CSR.mstatus.litValue) := (CSR.PRV_U << 4.U).asUInt | (1.U << 3.U).asUInt | (prv1 << 1.U).asUInt | ie1
@@ -240,8 +240,8 @@ class CSRTester(c: => CSR, trace: Boolean = false) extends BasicTester with Test
       regs(CSR.mtimecmp.litValue) := wdata
     }.elsewhen(csr_addr === CSR.mscratch) {
       regs(CSR.mscratch.litValue) := wdata
-    }.elsewhen(csr_addr === CSR.mbadaddr) {
-      regs(CSR.mbadaddr.litValue) := wdata
+    }.elsewhen(csr_addr === CSR.mtval) {
+      regs(CSR.mtval.litValue) := wdata
     }.elsewhen(csr_addr === CSR.mtohost) {
       regs(CSR.mtohost.litValue) := wdata
     }.elsewhen(csr_addr === CSR.mfromhost) {

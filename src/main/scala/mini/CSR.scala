@@ -97,12 +97,14 @@ object CSR {
 
   // Machine-level CSR addrs
   // Machine Information Registers
-  val mcpuid = 0xf00.U(CSR_ADDR_WIDTH)
-  val mimpid = 0xf01.U(CSR_ADDR_WIDTH)
+  val mvendorid = 0xf11.U(CSR_ADDR_WIDTH)
+  val marchid = 0xf12.U(CSR_ADDR_WIDTH)
+  val mimpid = 0xf13.U(CSR_ADDR_WIDTH)
   val mhartid = 0xf14.U(CSR_ADDR_WIDTH)
 
   // Machine Trap Setup
   val mstatus = 0x300.U(CSR_ADDR_WIDTH)
+  val misa = 0x301.U(CSR_ADDR_WIDTH)
   val medeleg = 0x302.U(CSR_ADDR_WIDTH)
   val mideleg = 0x303.U(CSR_ADDR_WIDTH)
   val mie = 0x304.U(CSR_ADDR_WIDTH)
@@ -117,7 +119,7 @@ object CSR {
   val mscratch = 0x340.U(CSR_ADDR_WIDTH)
   val mepc = 0x341.U(CSR_ADDR_WIDTH)
   val mcause = 0x342.U(CSR_ADDR_WIDTH)
-  val mbadaddr = 0x343.U(CSR_ADDR_WIDTH)
+  val mtval = 0x343.U(CSR_ADDR_WIDTH)
   val mip = 0x344.U(CSR_ADDR_WIDTH)
 
   // Machine Memory Protection
@@ -162,9 +164,11 @@ object CSR {
     cyclehw,
     timehw,
     instrethw,
-    mcpuid,
+    mvendorid,
+    marchid,
     mimpid,
     mhartid,
+    misa,
     mtvec,
     medeleg,
     mideleg,
@@ -175,7 +179,7 @@ object CSR {
     mscratch,
     mepc,
     mcause,
-    mbadaddr,
+    mtval,
     mip,
     mtohost,
     mfromhost,
@@ -191,6 +195,28 @@ object Cause {
   val LoadAddrMisaligned = 0x4.U
   val StoreAddrMisaligned = 0x6.U
   val EcallFromUMode = 0x8.U
+}
+
+object MISAMappings {
+  val MXLEN_32 = 1.U(2.W)
+  val MXLEN_64 = 2.U(2.W)
+  val MXLEN_128 = 3.U(2.W)
+
+  val A = (1 << ('A' - 'A')).U(26.W) // Atomic extension
+  val C = (1 << ('C' - 'A')).U(26.W) // Compressed extension
+  val D = (1 << ('D' - 'A')).U(26.W) // Double-precision floating-point extension
+  val E = (1 << ('E' - 'A')).U(26.W) // RV32E base ISA
+  val F = (1 << ('F' - 'A')).U(26.W) // Single-precision floating-point extension
+  val G = (1 << ('G' - 'A')).U(26.W) // Additional standard extensions present
+  val H = (1 << ('H' - 'A')).U(26.W) // Hypervisor extension
+  val I = (1 << ('I' - 'A')).U(26.W) // RV32I/64I/128I base ISA
+  val M = (1 << ('M' - 'A')).U(26.W) // Integer Multiply/Divide extension
+  val N = (1 << ('N' - 'A')).U(26.W) // User-level interrupts supported
+  val Q = (1 << ('Q' - 'A')).U(26.W) // Quad-precision floating-point extension
+  val S = (1 << ('S' - 'A')).U(26.W) // Supervisor mode implemented
+  val U = (1 << ('U' - 'A')).U(26.W) // User mode implemented
+  val X = (1 << ('X' - 'A')).U(26.W) // Non-standard extensions present
+
 }
 
 class CSRIO(xlen: Int) extends Bundle {
@@ -229,12 +255,15 @@ class CSR(val xlen: Int) extends Module {
   val instreth = RegInit(0.U((COUNTER_WIDTH / 2).W))
   val stvec = RegInit(0.U(xlen.W))
 
-  val mcpuid = Cat(
-    0.U(2.W) /* RV32I */,
+  val misa = Cat(
+    MISAMappings.MXLEN_32,
     0.U((xlen - 28).W),
-    (1 << ('I' - 'A') /* Base ISA */ |
-      1 << ('U' - 'A') /* User Mode */ ).U(26.W)
+    MISAMappings.I |
+      MISAMappings.U
   )
+
+  val mvendorid = 0.U(xlen.W) // not implemented
+  val marchid = 0.U(xlen.W) // not implemented
   val mimpid = 0.U(xlen.W) // not implemented
   val mhartid = 0.U(xlen.W) // only one hart
 
@@ -243,7 +272,7 @@ class CSR(val xlen: Int) extends Module {
   val PRV = RegInit(CSR.PRV_M)
 
   // Previous Privilege Modes
-  val MPP = RegInit(CSR.PRV_U)
+  val MPP = RegInit(CSR.PRV_M)
   val HPP = 0.U(2.W)
   val SPP = 0.U(1.W)
 
@@ -438,7 +467,7 @@ class CSR(val xlen: Int) extends Module {
 
   val mepc = Reg(UInt(xlen.W))
   val mcause = Reg(UInt(xlen.W))
-  val mbadaddr = Reg(UInt(xlen.W))
+  val mtval = Reg(UInt(xlen.W))
 
   val mtohost = RegInit(0.U(xlen.W))
   val mfromhost = Reg(UInt(xlen.W))
@@ -463,9 +492,11 @@ class CSR(val xlen: Int) extends Module {
     BitPat(CSR.cyclehw) -> cycleh,
     BitPat(CSR.timehw) -> timeh,
     BitPat(CSR.instrethw) -> instreth,
-    BitPat(CSR.mcpuid) -> mcpuid,
+    BitPat(CSR.mvendorid) -> mvendorid,
+    BitPat(CSR.marchid) -> marchid,
     BitPat(CSR.mimpid) -> mimpid,
     BitPat(CSR.mhartid) -> mhartid,
+    BitPat(CSR.misa) -> misa,
     BitPat(CSR.mtvec) -> mtvec,
     BitPat(CSR.medeleg) -> medeleg,
     BitPat(CSR.mideleg) -> mideleg,
@@ -476,7 +507,7 @@ class CSR(val xlen: Int) extends Module {
     BitPat(CSR.mscratch) -> mscratch,
     BitPat(CSR.mepc) -> mepc,
     BitPat(CSR.mcause) -> mcause,
-    BitPat(CSR.mbadaddr) -> mbadaddr,
+    BitPat(CSR.mtval) -> mtval,
     BitPat(CSR.mip) -> mip,
     BitPat(CSR.mtohost) -> mtohost,
     BitPat(CSR.mfromhost) -> mfromhost,
@@ -563,7 +594,7 @@ class CSR(val xlen: Int) extends Module {
     ) || (
       privInst && !privValid
     ) || (
-      isEcall && (PRV === CSR.PRV_U)
+      isEcall
     ) || isEbreak
   )
   io.evec := mtvec
@@ -582,14 +613,14 @@ class CSR(val xlen: Int) extends Module {
 
   when(!io.stall) {
     when(io.exception) {
-      mepc := io.pc >> 2 << 2
+      mepc := io.pc >> 2.U << 2.U
       mcause := MuxCase(
         Cause.IllegalInst,
         IndexedSeq(
           iaddrInvalid -> Cause.InstAddrMisaligned,
           laddrInvalid -> Cause.LoadAddrMisaligned,
           saddrInvalid -> Cause.StoreAddrMisaligned,
-          (isEcall && (PRV === CSR.PRV_U)) -> Cause.EcallFromUMode,
+          (isEcall) -> Cause.EcallFromUMode,
           isEbreak -> Cause.Breakpoint
         )
       )
@@ -607,7 +638,11 @@ class CSR(val xlen: Int) extends Module {
         UPIE := UIE
       }
 
-      when(iaddrInvalid || laddrInvalid || saddrInvalid) { mbadaddr := io.addr }
+      when(laddrInvalid || saddrInvalid) {
+        mtval := io.addr
+      }.elsewhen(iaddrInvalid) {
+        mtval := io.addr >> 1.U << 1.U
+      }
     }.elsewhen(isMret) {
       PRV := MPP
       MIE := MPIE
@@ -643,7 +678,7 @@ class CSR(val xlen: Int) extends Module {
         .elsewhen(csr_addr === CSR.mscratch) { mscratch := wdata }
         .elsewhen(csr_addr === CSR.mepc) { mepc := wdata >> 2.U << 2.U }
         .elsewhen(csr_addr === CSR.mcause) { mcause := wdata & (BigInt(1) << (xlen - 1) | 0xf).U }
-        .elsewhen(csr_addr === CSR.mbadaddr) { mbadaddr := wdata }
+        .elsewhen(csr_addr === CSR.mtval) { mtval := wdata }
         .elsewhen(csr_addr === CSR.mtohost) { mtohost := wdata }
         .elsewhen(csr_addr === CSR.mfromhost) { mfromhost := wdata }
         .elsewhen(csr_addr === CSR.cyclew) { cycle := wdata }
