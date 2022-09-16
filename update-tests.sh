@@ -24,14 +24,33 @@ nproc=$(nproc --ignore 1)
 
 MAKEFLAGS="-j${nproc}"
 
+echo "[$(date)] Updating tests"
 # Make ISA tests
 cd ${RISCV_TESTS}/isa
+make clean
 make
 
-echo "[$(date)] Finished compiling"
+echo "[$(date)] Finished compiling tests"
 
 # Copy the tests
 cp ./*.hex ${base_dir}/tests/
 cp ./*.dump ${base_dir}/tests/
+
+echo "[$(date)] Finished copying tests"
+
+# Benchmarks
+echo "[$(date)] Updating benchmarks"
+
+cd ${RISCV_TESTS}/benchmarks
+make clean
+
+echo "[$(date)] Compiling benchmarks"
+make
+
+echo "[$(date)] Finished compiling"
+
+# Copy the benchmarks
+cp ./*.riscv.hex ${base_dir}/tests/benchmarks/
+cp ./*.riscv.dump ${base_dir}/tests/benchmarks/
 
 echo "[$(date)] Finished copying"
