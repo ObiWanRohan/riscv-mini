@@ -32,8 +32,6 @@ class ExecuteStageIO(xlen: Int) extends Bundle {
   val csr = Input(new CSRIOOutput(xlen))
 
   val forwardSignals = Input(new Bundle {
-    val forward_dec_opA = ForwardDecOperand()
-    val forward_dec_opB = ForwardDecOperand()
     val forward_exe_opA = ForwardExeOperand()
     val forward_exe_opB = ForwardExeOperand()
     val forward_exe_rs1 = ForwardExeOperand()
@@ -69,22 +67,7 @@ class ExecuteStage(val conf: CoreConfig) extends Module {
       _.alu -> 0.U,
       _.rs2 -> 0.U,
       // _.dcache_out -> 0.S,
-      _.ctrl -> (new ControlSignals).Lit(
-        _.pc_sel -> PCSel.PC_4,
-        _.A_sel -> ASel.A_RS1,
-        _.B_sel -> BSel.B_RS2,
-        _.imm_sel -> ImmSel.IMM_X,
-        _.alu_op -> AluSel.ALU_XOR,
-        _.br_type -> BrType.BR_XXX,
-        _.inst_kill -> N,
-        _.pipeline_kill -> N,
-        _.st_type -> StType.ST_XXX,
-        _.ld_type -> LdType.LD_XXX,
-        _.wb_sel -> WbSel.WB_ALU,
-        _.wb_en -> Y,
-        _.csr_cmd -> CSR.N,
-        _.illegal -> N
-      )
+      _.ctrl -> ControlSignals.defaultSignals()
     )
   )
 
