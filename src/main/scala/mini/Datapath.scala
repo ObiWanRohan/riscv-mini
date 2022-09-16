@@ -25,39 +25,35 @@ class DatapathIO(xlen: Int) extends Bundle {
 }
 class Datapath(val conf: CoreConfig) extends Module {
   val io = IO(new DatapathIO(conf.xlen))
-  // val csr = Module(new CSR(conf.xlen)) //mem stage
-  // val regFile = Module(new RegFile(conf.xlen)) //decode stage
-  // val alu = Module(conf.makeAlu(conf.xlen)) //execute stage
-  // val immGen = Module(conf.makeImmGen(conf.xlen)) //decode stage
-  // val brCond = Module(conf.makeBrCond(conf.xlen)) //execute stage
-  val forwardingUnit = Module(conf.makeForwardingUnit(conf.xlen)) //datapath
+
+  val forwardingUnit = Module(conf.makeForwardingUnit(conf.xlen))
 
   import Control._
   import CPUControlSignalTypes._
   import ForwardDecOperand._
 
-  // Instanciating stage modules
-
+  // instantiating stage modules
   val fetchStage = Module(new FetchStage(conf))
   val decodeStage = Module(new DecodeStage(conf))
   val executeStage = Module(new ExecuteStage(conf))
   val memoryStage = Module(new MemoryStage(conf))
   val writebackStage = Module(new WritebackStage(conf))
 
-  // control is part of core & takes input below
+  // control is separate from datapath & takes input from fetch stage
   io.ctrl.inst := fetchStage.io.fd_reg.inst
 
   /** **** Control signals ****
     */
 
-  // // Full pipeline stall for when the IMem or DMem is not responding
-  // // This can also be called cache_miss_stall
-  val full_stall = !io.icache.resp.valid || !io.dcache.resp.valid
-
+  // Values for easy access
   val de_reg = decodeStage.io.de_reg
   val de_ctrl_ld = decodeStage.io.de_reg.ctrl.ld_type
   val de_inst = decodeStage.io.de_reg.inst
   val fd_inst = fetchStage.io.fd_reg.inst
+
+  // Full pipeline stall for when the IMem or DMem is not responding
+  // This can also be called cache_miss_stall
+  val full_stall = !io.icache.resp.valid || !io.dcache.resp.valid
 
   // Decode Stage Stall
   // This would stop the Fetch and Decode stages (keep the same instruction) inside.
@@ -172,7 +168,6 @@ class Datapath(val conf: CoreConfig) extends Module {
   memoryStage.io.em_reg := executeStage.io.em_reg
 
   memoryStage.io.alu := executeStage.io.alu
-  memoryStage.io.ex_rs2 := executeStage.io.ex_rs2
   memoryStage.io.brCond := executeStage.io.brCond
 
   io.dcache <> memoryStage.io.dcache

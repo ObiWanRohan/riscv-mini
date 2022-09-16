@@ -29,8 +29,6 @@ class MemoryStageIO(xlen: Int) extends Bundle {
   val de_reg = Input(new DecodeExecutePipelineRegister(xlen))
   val em_reg = Input(new ExecuteMemoryPipelineRegister(xlen))
 
-  // TODO: check for critical path
-  val ex_rs2 = Input(UInt(xlen.W))
   val alu = Input(new Bundle {
     val sum = UInt(xlen.W)
   })
@@ -111,35 +109,36 @@ class MemoryStage(val conf: CoreConfig) extends Module {
   csr.io.host.fromhost.valid := false.B
 
   val memReqValid =
-    !io.full_stall && (io.de_reg.ctrl.st_type.asUInt.orR || io.de_reg.ctrl.ld_type.asUInt.orR)
+    !io.full_stall && (io.em_reg.ctrl.st_type.asUInt.orR || io.em_reg.ctrl.ld_type.asUInt.orR)
 
   // D$ access
-  val daddr = Mux(io.full_stall, io.em_reg.alu, io.alu.sum) >> 2.U << 2.U
-  val woffset = (io.alu.sum(1) << 4.U).asUInt | (io.alu.sum(0) << 3.U).asUInt
+  // Setting the lower 2 bits to 0
+  val daddr = io.em_reg.alu >> 2.U << 2.U
+  val woffset = (io.em_reg.alu(1) << 4.U).asUInt | (io.em_reg.alu(0) << 3.U).asUInt
 
   val tohost_reg = Reg(UInt(conf.xlen.W))
-  val tohost_mem_req = memReqValid && io.de_reg.ctrl.st_type.asUInt.orR && (daddr === Const.HOST_ADDR.U)
+  val tohost_mem_req = memReqValid && io.em_reg.ctrl.st_type.asUInt.orR && (daddr === Const.HOST_ADDR.U)
 
-  // Writing to host IO
-  when(tohost_mem_req) {
-    // TODO: add mask here for different kinds of stores
-    // TODO: can we use the value from pipeline reg??
-    tohost_reg := io.ex_rs2
-  }
-
-  // Note the request being made when the instruction is in the previous stage
-  io.dcache.req.valid := !io.full_stall && (io.de_reg.ctrl.st_type.asUInt.orR || io.de_reg.ctrl.ld_type.asUInt.orR)
-  io.dcache.req.bits.addr := daddr
-  io.dcache.req.bits.data := io.ex_rs2 << woffset
-  io.dcache.req.bits.mask := MuxLookup(
-    Mux(io.full_stall, io.em_reg.ctrl.st_type, io.de_reg.ctrl.st_type).asUInt,
+  val storeMask = MuxLookup(
+    io.em_reg.ctrl.st_type.asUInt,
     "b0000".U,
     Seq(
       StType.ST_SW.asUInt -> "b1111".U,
-      StType.ST_SH.asUInt -> ("b11".U << io.alu.sum(1, 0)),
-      StType.ST_SB.asUInt -> ("b1".U << io.alu.sum(1, 0))
+      StType.ST_SH.asUInt -> ("b11".U << io.em_reg.alu(1, 0)),
+      StType.ST_SB.asUInt -> ("b1".U << io.em_reg.alu(1, 0))
     )
   )
+
+  // Writing to host IO
+  when(tohost_mem_req) {
+    tohost_reg := io.em_reg.rs2 & storeMask
+  }
+
+  // Note the request being made when the instruction is in the previous stage
+  io.dcache.req.valid := !io.full_stall && (io.em_reg.ctrl.st_type.asUInt.orR || io.em_reg.ctrl.ld_type.asUInt.orR)
+  io.dcache.req.bits.addr := daddr
+  io.dcache.req.bits.data := io.em_reg.rs2 << woffset
+  io.dcache.req.bits.mask := storeMask
   // Abort store when there's an exception
   io.dcache.abort := csr.io.exception
 
@@ -183,7 +182,7 @@ class MemoryStage(val conf: CoreConfig) extends Module {
 
   // Use data from memory if the memory request was valid in the previous cycle
   // i.e the data is being written in the current cycle. Otherwise send data from CSR
-  io.host.tohost := Mux(RegNext(tohost_mem_req), tohost_reg, csr.io.host.tohost)
+  io.host.tohost := Mux(tohost_mem_req, tohost_reg, csr.io.host.tohost)
 
   io.mw_reg := mw_reg
   io.illegal := illegal

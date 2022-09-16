@@ -46,7 +46,6 @@ class ExecuteStageIO(xlen: Int) extends Bundle {
     val taken = Bool()
   })
 
-  // TODO : Output this from a register to reduce critical path
   val ex_rs2 = Output(UInt(xlen.W))
   val alu = Output(new Bundle {
     val sum = UInt(xlen.W)
@@ -91,7 +90,6 @@ class ExecuteStage(val conf: CoreConfig) extends Module {
 
   // val illegal = io.illegal
 
-  // ctrl^c ctrl^v
   val ex_alu_opA = Wire(UInt(conf.xlen.W))
   val ex_alu_opB = Wire(UInt(conf.xlen.W))
   val ex_rs1 = Wire(UInt(conf.xlen.W))
