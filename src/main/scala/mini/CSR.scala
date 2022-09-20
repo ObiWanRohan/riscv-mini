@@ -109,6 +109,7 @@ object CSR {
   val mideleg = 0x303.U(CSR_ADDR_WIDTH)
   val mie = 0x304.U(CSR_ADDR_WIDTH)
   val mtvec = 0x305.U(CSR_ADDR_WIDTH)
+  val mcounteren = 0x306.U(CSR_ADDR_WIDTH)
   val mtimecmp = 0x321.U(CSR_ADDR_WIDTH)
 
   // Machine Timers and Counters
@@ -467,10 +468,12 @@ class CSR(val xlen: Int) extends Module {
     USIE
   ).asUInt
 
+  // Counter Enable for Lower modes
+  val mcounteren = 0.U(32.W)
+
   val mtimecmp = Reg(UInt(xlen.W))
 
   val mscratch = Reg(UInt(xlen.W))
-
   val mepc = Reg(UInt(xlen.W))
   val mcause = Reg(UInt(xlen.W))
   val mtval = Reg(UInt(xlen.W))
@@ -518,6 +521,7 @@ class CSR(val xlen: Int) extends Module {
     BitPat(CSR.mtohost) -> mtohost,
     BitPat(CSR.mfromhost) -> mfromhost,
     BitPat(CSR.mstatus) -> mstatus,
+    BitPat(CSR.mcounteren) -> mcounteren,
     BitPat(CSR.pmpcfg0) -> pmpcfg0,
     BitPat(CSR.pmpcfg1) -> pmpcfg1,
     BitPat(CSR.pmpcfg2) -> pmpcfg2,
