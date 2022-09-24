@@ -11,10 +11,10 @@ import mini.common.RISCVConstants._
 import mini.DatapathStages._
 
 object Const {
-  val PC_START = 0x200
+  val PC_START = 0x1200
   val PC_EVEC = 0x100
   // Memory Mapped IO address
-  val HOST_ADDR = 0x1000
+  val HOST_ADDR = 0xf000
 }
 
 class DatapathIO(xlen: Int) extends Bundle {
