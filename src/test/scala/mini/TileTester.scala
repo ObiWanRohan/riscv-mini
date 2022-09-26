@@ -143,7 +143,9 @@ class TileSimpleTests extends AnyFlatSpec with ChiselScalatestTester {
   behavior.of("Tile")
   val p = MiniConfig()
   it should "execute a simple test" in {
-    test(new TileTester(Tile(p), "rv32ui-p-simple")).runUntilStop(15000)
+    test(new TileTester(Tile(p), "rv32ui-p-simple"))
+      .withAnnotations(Seq(VerilatorBackendAnnotation, WriteVcdAnnotation))
+      .runUntilStop(15000)
   }
 }
 
