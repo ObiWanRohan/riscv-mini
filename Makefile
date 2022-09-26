@@ -52,7 +52,9 @@ benchmark_out_files = $(foreach f,$(benchmark_hex_files),$(patsubst %.hex,%.out,
 
 $(benchmark_out_files): $(benchmark_out_dir)/%.out: $(base_dir)/VTile $(base_dir)/tests/benchmarks/%.hex
 	mkdir -p $(out_dir)/benchmarks
-	$^ $(patsubst %.out,-v %.vcd,$@) -t $(VTILE_CYCLES) 2> >(tee $@)
+	# Commented as it produces too much output
+	# $^ $(patsubst %.out,-v %.vcd,$@) -t $(VTILE_CYCLES) 2> >(tee $@)
+	$^ $(patsubst %.out,-v %.vcd,$@) -t $(VTILE_CYCLES) 2>&1 >$@
 
 run-benchmarks: $(benchmark_out_files)
 
