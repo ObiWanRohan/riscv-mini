@@ -115,6 +115,10 @@ object CSR {
   // Machine Timers and Counters
   val mtime = 0x701.U(CSR_ADDR_WIDTH)
   val mtimeh = 0x741.U(CSR_ADDR_WIDTH)
+  val mcycle = 0xb00.U(CSR_ADDR_WIDTH)
+  val mcycleh = 0xb80.U(CSR_ADDR_WIDTH)
+  val minstret = 0xb02.U(CSR_ADDR_WIDTH)
+  val minstreth = 0xb82.U(CSR_ADDR_WIDTH)
 
   // Machine Trap Handling
   val mscratch = 0x340.U(CSR_ADDR_WIDTH)
@@ -175,6 +179,10 @@ object CSR {
     mideleg,
     mie,
     mtimecmp,
+    mcycle,
+    mcycleh,
+    minstret,
+    minstreth,
     mtime,
     mtimeh,
     mscratch,
@@ -511,6 +519,10 @@ class CSR(val xlen: Int) extends Module {
     BitPat(CSR.mideleg) -> mideleg,
     BitPat(CSR.mie) -> mie,
     BitPat(CSR.mtimecmp) -> mtimecmp,
+    BitPat(CSR.mcycle) -> cycle,
+    BitPat(CSR.mcycleh) -> cycleh,
+    BitPat(CSR.minstret) -> instret,
+    BitPat(CSR.minstreth) -> instreth,
     BitPat(CSR.mtime) -> time,
     BitPat(CSR.mtimeh) -> timeh,
     BitPat(CSR.mscratch) -> mscratch,
@@ -682,6 +694,10 @@ class CSR(val xlen: Int) extends Module {
           MSIE := wdata(3)
         }
         .elsewhen(csr_addr === CSR.mtvec) { _mtvec.base := wdata }
+        .elsewhen(csr_addr === CSR.mcycle) { cycle := wdata }
+        .elsewhen(csr_addr === CSR.mcycleh) { cycleh := wdata }
+        .elsewhen(csr_addr === CSR.minstret) { cycle := wdata }
+        .elsewhen(csr_addr === CSR.minstreth) { cycleh := wdata }
         .elsewhen(csr_addr === CSR.mtime) { time := wdata }
         .elsewhen(csr_addr === CSR.mtimeh) { timeh := wdata }
         .elsewhen(csr_addr === CSR.mtimecmp) { mtimecmp := wdata }
