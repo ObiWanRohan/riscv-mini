@@ -167,7 +167,7 @@ class ExecuteStage(val conf: CoreConfig) extends Module {
     em_reg.pc := io.de_reg.pc
     em_reg.inst := io.de_reg.inst
     em_reg.ctrl := io.de_reg.ctrl
-    em_reg.rs2 := io.de_reg.rs2
+    em_reg.rs2 := io.ex_rs2
     em_reg.alu := alu.io.out
 
     // ew_reg.csr_in := Mux(io.de_reg.ctrl.imm_sel === ImmSel.IMM_Z, io.de_reg.immOut, io.de_reg.opA)
