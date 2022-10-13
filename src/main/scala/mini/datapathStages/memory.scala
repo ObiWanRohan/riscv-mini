@@ -104,7 +104,7 @@ class MemoryStage(val conf: CoreConfig) extends Module {
   val tohost_reg = Reg(UInt(conf.xlen.W))
   val tohost_mem_req = memReqValid && io.em_reg.ctrl.st_type.asUInt.orR && (daddr === Const.HOST_ADDR.U)
 
-  val storeMask = MuxLookup(
+  val storeMaskControlBits = MuxLookup(
     io.em_reg.ctrl.st_type.asUInt,
     "b0000".U,
     Seq(
@@ -113,6 +113,14 @@ class MemoryStage(val conf: CoreConfig) extends Module {
       StType.ST_SB.asUInt -> ("b1".U << io.em_reg.alu(1, 0))
     )
   )
+
+  // Creating the complete mask from the store mask bits
+  // Number of bytes in the data (as each mask bit controls a byte)
+  val numMaskRepeat = conf.xlen / 8
+  val storeMask = Wire(UInt(conf.xlen.W))
+  // Converting the small mask to bits, repeating each element numMaskRepeat times,
+  // reversing the output (as the flatmap starts at the first element), and concatenating all the bits
+  storeMask := Cat(storeMaskControlBits.asBools.flatMap(Seq.fill(numMaskRepeat)(_)).reverse)
 
   // Writing to host IO
   when(tohost_mem_req) {
