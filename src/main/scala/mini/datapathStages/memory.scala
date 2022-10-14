@@ -131,7 +131,7 @@ class MemoryStage(val conf: CoreConfig) extends Module {
   io.dcache.req.valid := !io.full_stall && (io.em_reg.ctrl.st_type.asUInt.orR || io.em_reg.ctrl.ld_type.asUInt.orR)
   io.dcache.req.bits.addr := daddr
   io.dcache.req.bits.data := io.em_reg.rs2 << woffset
-  io.dcache.req.bits.mask := storeMask
+  io.dcache.req.bits.mask := storeMaskControlBits
   // Abort store when there's an exception
   io.dcache.abort := csr.io.exception
 
