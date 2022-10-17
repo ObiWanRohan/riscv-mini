@@ -69,8 +69,11 @@ object Control {
     CSRRCI-> List(PCSel.PC_0  , ASel.A_XXX,  BSel.B_XXX, ImmSel.IMM_Z, ALU_XXX   , BrType.BR_XXX, Y, StType.ST_XXX, LdType.LD_XXX, WbSel.WB_CSR, Y, CSR.C, N),
     ECALL -> List(PCSel.PC_4  , ASel.A_XXX,  BSel.B_XXX, ImmSel.IMM_X, ALU_XXX   , BrType.BR_XXX, N, StType.ST_XXX, LdType.LD_XXX, WbSel.WB_CSR, N, CSR.P, N),
     EBREAK-> List(PCSel.PC_4  , ASel.A_XXX,  BSel.B_XXX, ImmSel.IMM_X, ALU_XXX   , BrType.BR_XXX, N, StType.ST_XXX, LdType.LD_XXX, WbSel.WB_CSR, N, CSR.P, N),
-    ERET  -> List(PCSel.PC_EPC, ASel.A_XXX,  BSel.B_XXX, ImmSel.IMM_X, ALU_XXX   , BrType.BR_XXX, Y, StType.ST_XXX, LdType.LD_XXX, WbSel.WB_CSR, N, CSR.P, N),
-    WFI   -> List(PCSel.PC_4  , ASel.A_XXX,  BSel.B_XXX, ImmSel.IMM_X, ALU_XXX   , BrType.BR_XXX, N, StType.ST_XXX, LdType.LD_XXX, WbSel.WB_ALU, N, CSR.N, N))
+    WFI   -> List(PCSel.PC_4  , ASel.A_XXX,  BSel.B_XXX, ImmSel.IMM_X, ALU_XXX   , BrType.BR_XXX, N, StType.ST_XXX, LdType.LD_XXX, WbSel.WB_ALU, N, CSR.N, N),
+    URET  -> List(PCSel.PC_EPC, ASel.A_XXX,  BSel.B_XXX, ImmSel.IMM_X, ALU_XXX   , BrType.BR_XXX, N, StType.ST_XXX, LdType.LD_XXX, WbSel.WB_ALU, N, CSR.P, N),
+    SRET  -> List(PCSel.PC_EPC, ASel.A_XXX,  BSel.B_XXX, ImmSel.IMM_X, ALU_XXX   , BrType.BR_XXX, N, StType.ST_XXX, LdType.LD_XXX, WbSel.WB_ALU, N, CSR.P, N),
+    MRET  -> List(PCSel.PC_EPC, ASel.A_XXX,  BSel.B_XXX, ImmSel.IMM_X, ALU_XXX   , BrType.BR_XXX, N, StType.ST_XXX, LdType.LD_XXX, WbSel.WB_ALU, N, CSR.P, N))
+
   // format: on
 }
 

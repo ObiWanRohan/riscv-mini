@@ -9,6 +9,7 @@ import chisel3.experimental.BundleLiterals._
 object Const {
   val PC_START = 0x200
   val PC_EVEC = 0x100
+  val HOST_ADDR = 0x1000
 }
 
 class DatapathIO(xlen: Int) extends Bundle {
@@ -136,10 +137,12 @@ class Datapath(val conf: CoreConfig) extends Module {
   brCond.io.rs2 := rs2
   brCond.io.br_type := io.ctrl.br_type
 
+  val memReqValid = !stall && (io.ctrl.st_type.asUInt.orR || io.ctrl.ld_type.asUInt.orR)
+
   // D$ access
   val daddr = Mux(stall, ew_reg.alu, alu.io.sum) >> 2.U << 2.U
   val woffset = (alu.io.sum(1) << 4.U).asUInt | (alu.io.sum(0) << 3.U).asUInt
-  io.dcache.req.valid := !stall && (io.ctrl.st_type.asUInt.orR || io.ctrl.ld_type.asUInt.orR)
+  io.dcache.req.valid := memReqValid
   io.dcache.req.bits.addr := daddr
   io.dcache.req.bits.data := rs2 << woffset
   io.dcache.req.bits.mask := MuxLookup(
@@ -199,7 +202,24 @@ class Datapath(val conf: CoreConfig) extends Module {
   csr.io.pc_check := pc_check
   csr.io.ld_type := ld_type
   csr.io.st_type := st_type
-  io.host <> csr.io.host
+
+  // Temporary change for tests
+  // io.host <> csr.io.host
+  csr.io.host.fromhost.bits := 0.U
+  csr.io.host.fromhost.valid := false.B
+
+  val tohost_reg = Reg(UInt(conf.xlen.W))
+  val tohost_mem_req = memReqValid && io.ctrl.st_type.asUInt.orR && daddr === Const.HOST_ADDR.U
+
+  // Use data from memory if the memory request was valid in the previous cycle
+  // i.e the data is being written in the current cycle. Otherwise send data from CSR
+  io.host.tohost := Mux(RegNext(tohost_mem_req), tohost_reg, csr.io.host.tohost)
+
+  // Writing to host IO
+  when(tohost_mem_req) {
+    // TODO, add mask here
+    tohost_reg := rs2
+  }
 
   // Regfile Write
   val regWrite =
