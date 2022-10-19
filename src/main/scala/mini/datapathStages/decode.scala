@@ -31,6 +31,7 @@ class DecodeStageIO(xlen: Int) extends Bundle {
   val dec_stall = Input(Bool())
   val if_kill = Input(Bool())
   val dec_kill = Input(Bool())
+  val execute_stall = Input(Bool())
 
   // Input from Control unit
   val ctrl = Input(new ControlSignals())
@@ -157,7 +158,7 @@ class DecodeStage(val conf: CoreConfig) extends Module {
         )
       )
 
-    }.otherwise {
+    }.elsewhen(!io.execute_stall || io.dec_kill) {
       // Insert NOP when Decode is stalled
       // Advance instruction from Fetch stage
 

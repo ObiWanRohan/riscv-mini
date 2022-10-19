@@ -25,6 +25,7 @@ class ExecuteMemoryPipelineRegister(xlen: Int) extends Bundle {
 
 class ExecuteStageIO(xlen: Int) extends Bundle {
   val full_stall = Input(Bool())
+  val mem_stage_stall = Input(Bool())
 
   val de_reg = Input(new DecodeExecutePipelineRegister(xlen))
   val mw_reg = Input(new MemoryWritebackPipelineRegister(xlen))
@@ -163,7 +164,7 @@ class ExecuteStage(val conf: CoreConfig) extends Module {
     em_reg.alu := 0.U
     em_reg.csr_in := 0.U
 
-  }.elsewhen(!io.full_stall && !execute_kill) {
+  }.elsewhen(!io.full_stall && !execute_kill && !io.mem_stage_stall) {
     em_reg.pc := io.de_reg.pc
     em_reg.inst := io.de_reg.inst
     em_reg.ctrl := io.de_reg.ctrl
@@ -176,7 +177,6 @@ class ExecuteStage(val conf: CoreConfig) extends Module {
   }
 
   // forwardingUnit.io.em_reg := em_reg
-  // ctrl^c ctrl^v
 
   // IO connections for execute stafe
   io.em_reg := em_reg

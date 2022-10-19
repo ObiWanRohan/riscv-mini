@@ -56,10 +56,17 @@ class Datapath(val conf: CoreConfig) extends Module {
   val full_stall = !io.icache.resp.valid || !io.dcache.resp.valid
 
   // Decode Stage Stall
-  // This would stop the Fetch and Decode stages (keep the same instruction) inside.
+  // This would stop the Fetch and Decode stages (keep the same instruction inside).
   // NOPs will be inserted in the Execute stage while this is asserted
   // Can also be called hazard_stall
   val dec_stall = Wire(Bool())
+
+  // Memory Stage Stall
+  // This would stall the Memory and Execute stages (keep the same instruction inside)
+  // NOPs will be inserted into the Writeback stage while this is asserted
+  // This is primarily needed for the data loads, since the memory has a latency.
+  val mem_stage_stall = Wire(Bool())
+  val execute_stall = Wire(Bool())
 
   // format: off
   dec_stall := (
@@ -93,7 +100,9 @@ class Datapath(val conf: CoreConfig) extends Module {
           )
         )
       )
-  )
+  ) || (
+    mem_stage_stall
+  ) 
   // || io.ctrl.fencei || RegNext(io.ctrl.fencei)
   // format: on
 
@@ -123,6 +132,31 @@ class Datapath(val conf: CoreConfig) extends Module {
     executeStage.io.brCond.taken
   )
 
+  execute_stall := mem_stage_stall
+
+  // Whether a memory request has been sent for the current instruction
+  val mem_load_request_sent =
+    RegEnable(
+      memoryStage.io.dcache.req.valid && executeStage.io.em_reg.ctrl.ld_type.asUInt.orR,
+      false.B,
+      !full_stall
+    )
+
+  // Stall memory stage if there is a load instruction in the memory stage
+  // and the response is not valid
+  mem_stage_stall := (
+    executeStage.io.em_reg.ctrl.ld_type.asUInt.orR
+  ) && (
+    (
+      memoryStage.io.dcache.req.valid
+    ) || (
+      mem_load_request_sent && full_stall
+    )
+    // && !full_stall
+  )
+  // mem_load_request_sent && !full_stall ->0
+  // !mem_load_request_sent && full_stall -> 0
+
   // global signal inputs to fetch stage
   fetchStage.io.full_stall := full_stall
   fetchStage.io.dec_stall := dec_stall
@@ -142,6 +176,7 @@ class Datapath(val conf: CoreConfig) extends Module {
   decodeStage.io.dec_stall := dec_stall
   decodeStage.io.if_kill := if_kill
   decodeStage.io.dec_kill := dec_kill
+  decodeStage.io.execute_stall := execute_stall
   // Input from control unit
   decodeStage.io.ctrl := io.ctrl
 
@@ -156,6 +191,7 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   // Execute stage IO connections
   executeStage.io.full_stall := full_stall
+  executeStage.io.mem_stage_stall := mem_stage_stall
   executeStage.io.de_reg := decodeStage.io.de_reg
   executeStage.io.mw_reg := memoryStage.io.mw_reg
 
@@ -164,6 +200,7 @@ class Datapath(val conf: CoreConfig) extends Module {
 
   // memory stage IO connections
   memoryStage.io.full_stall := full_stall
+  memoryStage.io.mem_stage_stall := mem_stage_stall
   memoryStage.io.de_reg := decodeStage.io.de_reg
   memoryStage.io.em_reg := executeStage.io.em_reg
 

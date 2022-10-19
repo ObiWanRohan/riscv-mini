@@ -79,7 +79,7 @@ class FetchStage(val conf: CoreConfig) extends Module {
 
   // Pipelining
   // Only update the instruction when not stalling
-  when(!io.full_stall && !io.dec_stall) {
+  when(!io.full_stall && (!io.dec_stall || io.if_kill)) {
     fd_reg.pc := pc
     when(io.if_kill) {
       fd_reg.inst := Instructions.NOP

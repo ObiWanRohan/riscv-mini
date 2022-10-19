@@ -26,6 +26,7 @@ class MemoryStageIO(xlen: Int) extends Bundle {
   val dcache = Flipped(new CacheIO(xlen, xlen))
 
   val full_stall = Input(Bool())
+  val mem_stage_stall = Input(Bool())
   val de_reg = Input(new DecodeExecutePipelineRegister(xlen))
   val em_reg = Input(new ExecuteMemoryPipelineRegister(xlen))
 
@@ -127,8 +128,20 @@ class MemoryStage(val conf: CoreConfig) extends Module {
     tohost_reg := io.em_reg.rs2 & storeMask
   }
 
-  // Note the request being made when the instruction is in the previous stage
-  io.dcache.req.valid := !io.full_stall && (io.em_reg.ctrl.st_type.asUInt.orR || io.em_reg.ctrl.ld_type.asUInt.orR)
+  val mem_load_request_sent = RegEnable(
+    io.dcache.req.valid && io.em_reg.ctrl.ld_type.asUInt.orR,
+    false.B,
+    !io.full_stall
+  )
+
+  io.dcache.req.valid := (
+    !io.full_stall
+  ) && (
+    io.em_reg.ctrl.st_type.asUInt.orR || io.em_reg.ctrl.ld_type.asUInt.orR
+  ) && (
+    !mem_load_request_sent
+    // !RegNext(io.mem_stage_stall)
+  )
   io.dcache.req.bits.addr := daddr
   io.dcache.req.bits.data := io.em_reg.rs2 << woffset
   io.dcache.req.bits.mask := storeMaskControlBits
@@ -154,7 +167,7 @@ class MemoryStage(val conf: CoreConfig) extends Module {
     pc_check := false.B
     illegal := false.B
 
-  }.elsewhen(!io.full_stall && !csr.io.exception) {
+  }.elsewhen(!io.full_stall && !csr.io.exception && !io.mem_stage_stall) {
     mw_reg.pc := io.em_reg.pc
     mw_reg.inst := io.em_reg.inst
     mw_reg.ctrl := io.em_reg.ctrl
