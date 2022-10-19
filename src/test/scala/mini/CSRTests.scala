@@ -32,7 +32,8 @@ class CSRTester(c: => CSR, trace: Boolean = false) extends BasicTester with Test
       SYS(Funct3.CSRRC, 0, CSR.mcause, 0),
       Instructions.EBREAK,
       SYS(Funct3.CSRRC, 0, CSR.mcause, 0),
-      Instructions.ERET,
+      Instructions.MRET,
+      Instructions.URET,
       SYS(Funct3.CSRRC, 0, CSR.mcause, 0),
       // illegal addr
       J(rand_rd.litValue, rnd.nextInt()),
@@ -67,7 +68,8 @@ class CSRTester(c: => CSR, trace: Boolean = false) extends BasicTester with Test
     .map(_.litValue)
     .map { addr =>
       addr -> RegInit(
-        if (addr == CSR.misa.litValue) (BigInt(1) << ('I' - 'A') | BigInt(1) << ('U' - 'A')).U(xlen.W)
+        if (addr == CSR.misa.litValue)
+          (BigInt(1) << (xlen - 28 + 26) | BigInt(1) << ('I' - 'A') | BigInt(1) << ('U' - 'A')).U(xlen.W)
         else if (addr == CSR.mstatus.litValue) (CSR.PRV_M.litValue << 4 | CSR.PRV_M.litValue << 1).U(xlen.W)
         else if (addr == CSR.mtvec.litValue) Const.PC_EVEC.U(xlen.W)
         else 0.U(xlen.W)
@@ -100,7 +102,7 @@ class CSRTester(c: => CSR, trace: Boolean = false) extends BasicTester with Test
   // should consider prv in runtime
   val _is_ecall = _csr_addr.map(x => ((x & 0x1) == 0x0) && (((x >> 8) & 0x1) == 0x0))
   val _is_ebreak = _csr_addr.map(x => ((x & 0x1) > 0x0) && (((x >> 8) & 0x1) == 0x0))
-  val _is_eret = _csr_addr.map(x => ((x & 0x1) == 0x0) && (((x >> 8) & 0x1) > 0x0))
+  val _is_mret = _csr_addr.map(x => ((x & 0x1) > 0x0) && (((x >> 8) & 0x1) > 0x0))
   // should consider pc_check in runtime
   val _iaddr_invalid = addr.map(x => ((x >> 1) & 0x1) > 0)
   // should consider ld_type & st_type
@@ -116,13 +118,18 @@ class CSRTester(c: => CSR, trace: Boolean = false) extends BasicTester with Test
   rs1_addr := VecInit(_rs1_addr.map(_.U))(cntr)
   csr_ro := VecInit(_csr_ro.map(_.B))(cntr)
   csr_valid := VecInit(_csr_valid.map(_.B))(cntr)
+
   val wen = dut.io.cmd === CSR.W || dut.io.cmd(1) && rs1_addr =/= 0.U
-  val prv1 = (regs(CSR.mstatus.litValue) >> 4.U).asUInt & 0x3.U
-  val ie1 = (regs(CSR.mstatus.litValue) >> 3.U).asUInt & 0x1.U
-  val prv = (regs(CSR.mstatus.litValue) >> 1.U).asUInt & 0x3.U
-  val ie = regs(CSR.mstatus.litValue) & 0x1.U
+
+  val prv = RegInit(CSR.PRV_M)
+
+  val mpp = (regs(CSR.mstatus.litValue) >> 11.U) & 0x3.U
+  val mie = (regs(CSR.mstatus.litValue) >> 3.U) & 0x1.U
+  val uie = regs(CSR.mstatus.litValue) & 0x1.U
+
   val prv_inst = dut.io.cmd === CSR.P
   val prv_valid = VecInit(_prv_level.map(_.U))(cntr) <= prv
+
   val iaddr_invalid = VecInit(_iaddr_invalid.map(_.B))(cntr) && dut.io.pc_check
   val laddr_invalid =
     VecInit(_haddr_invalid.map(_.B))(cntr) && (dut.io.ld_type === LD_LH || dut.io.ld_type === LD_LHU) ||
@@ -132,7 +139,7 @@ class CSRTester(c: => CSR, trace: Boolean = false) extends BasicTester with Test
       VecInit(_waddr_invalid.map(_.B))(cntr) && dut.io.st_type === ST_SW
   val is_ecall = prv_inst && VecInit(_is_ecall.map(_.B))(cntr)
   val is_ebreak = prv_inst && VecInit(_is_ebreak.map(_.B))(cntr)
-  val is_eret = prv_inst && VecInit(_is_eret.map(_.B))(cntr)
+  val is_mret = prv_inst && VecInit(_is_mret.map(_.B))(cntr)
   val exception = dut.io.illegal || iaddr_invalid || laddr_invalid || saddr_invalid ||
     (((dut.io.cmd & 0x3.U) > 0.U) && (!csr_valid || !prv_valid)) ||
     (csr_ro && wen) || (prv_inst && !prv_valid) || is_ecall || is_ebreak
@@ -159,61 +166,90 @@ class CSRTester(c: => CSR, trace: Boolean = false) extends BasicTester with Test
   regs(CSR.time.litValue) := regs(CSR.time.litValue) + 1.U
   regs(CSR.timew.litValue) := regs(CSR.timew.litValue) + 1.U
   regs(CSR.mtime.litValue) := regs(CSR.mtime.litValue) + 1.U
-  regs(CSR.cycle.litValue) := regs(CSR.cycle.litValue) + 1.U
-  regs(CSR.cyclew.litValue) := regs(CSR.cyclew.litValue) + 1.U
   when(regs(CSR.time.litValue).andR) {
-    regs(CSR.mtime.litValue) := regs(CSR.mtime.litValue) + 1.U
     regs(CSR.timeh.litValue) := regs(CSR.timeh.litValue) + 1.U
+    regs(CSR.mtimeh.litValue) := regs(CSR.mtimeh.litValue) + 1.U
     regs(CSR.timehw.litValue) := regs(CSR.timehw.litValue) + 1.U
   }
+
+  regs(CSR.cycle.litValue) := regs(CSR.cycle.litValue) + 1.U
+  regs(CSR.mcycle.litValue) := regs(CSR.mcycle.litValue) + 1.U
+  regs(CSR.cyclew.litValue) := regs(CSR.cyclew.litValue) + 1.U
   when(regs(CSR.cycle.litValue).andR) {
     regs(CSR.cycleh.litValue) := regs(CSR.cycleh.litValue) + 1.U
     regs(CSR.cyclehw.litValue) := regs(CSR.cyclehw.litValue) + 1.U
   }
+
   when(instret) {
     regs(CSR.instret.litValue) := regs(CSR.instret.litValue) + 1.U
+    regs(CSR.minstret.litValue) := regs(CSR.minstret.litValue) + 1.U
     regs(CSR.instretw.litValue) := regs(CSR.instret.litValue) + 1.U
     when(regs(CSR.instret.litValue).andR) {
       regs(CSR.instreth.litValue) := regs(CSR.instreth.litValue) + 1.U
+      regs(CSR.minstreth.litValue) := regs(CSR.minstreth.litValue) + 1.U
       regs(CSR.instrethw.litValue) := regs(CSR.instrethw.litValue) + 1.U
     }
   }
 
   when(exception) {
     regs(CSR.mepc.litValue) := (dut.io.pc >> 2.U) << 2.U
-    regs(CSR.mcause.litValue) :=
-      Mux(
-        iaddr_invalid,
-        Cause.InstAddrMisaligned,
-        Mux(
-          laddr_invalid,
-          Cause.LoadAddrMisaligned,
-          Mux(
-            saddr_invalid,
-            Cause.StoreAddrMisaligned,
-            Mux(
-              prv_inst && VecInit(is_ecall)(cntr),
-              Cause.Ecall + prv,
-              Mux(prv_inst && VecInit(is_ebreak)(cntr), Cause.Breakpoint, Cause.IllegalInst)
-            )
-          )
-        )
+    regs(CSR.mcause.litValue) := MuxCase(
+      Cause.IllegalInst,
+      IndexedSeq(
+        iaddr_invalid -> Cause.InstAddrMisaligned,
+        laddr_invalid -> Cause.LoadAddrMisaligned,
+        saddr_invalid -> Cause.StoreAddrMisaligned,
+        (prv_inst && VecInit(is_ecall)(cntr)) -> Cause.EcallFromUMode,
+        (prv_inst && VecInit(is_ebreak)(cntr)) -> Cause.Breakpoint
       )
-    regs(CSR.mstatus.litValue) := (prv << 4.U).asUInt | (ie << 3.U).asUInt | (CSR.PRV_M << 1.U).asUInt | 0.U
+    )
+
+    // Move to M mode
+    prv := CSR.PRV_M
+
+    when(prv === CSR.PRV_M) {
+      regs(CSR.mstatus.litValue) := (
+        (CSR.PRV_M << 11.U).asUInt // MPP becomes PRV_M
+          | (mie << 7.U).asUInt // Set MPIE to MIE
+          | (mie << 3.U).asUInt
+          | 0.U // UIE is set to 0
+      )
+
+    }.elsewhen(prv === CSR.PRV_U) {
+
+      regs(CSR.mstatus.litValue) := (
+        (CSR.PRV_U << 11.U).asUInt // MPP becomes PRV_U
+          | (uie << 4.U).asUInt // Set UIE to UPIE
+          | (mie << 3.U).asUInt
+          | 0.U // UIE is set to 0
+      )
+
+    }
+
     when(iaddr_invalid || laddr_invalid || saddr_invalid) {
       regs(CSR.mtval.litValue) := dut.io.addr
     }
-  }.elsewhen(is_eret) {
-    regs(CSR.mstatus.litValue) := (CSR.PRV_U << 4.U).asUInt | (1.U << 3.U).asUInt | (prv1 << 1.U).asUInt | ie1
+
+  }.elsewhen(is_mret) {
+    regs(CSR.mstatus.litValue) := (
+      (CSR.PRV_U << 11.U).asUInt // MPP becomes PRV_U
+        | (1.U << 7.U).asUInt // MPIE is set to 1
+        | (mie << 3.U).asUInt
+        | uie
+    )
+    prv := mpp
+
   }.elsewhen(wen) {
     when(csr_addr === CSR.mstatus) {
-      regs(CSR.mstatus.litValue) := wdata(5, 0)
+      // regs(CSR.mstatus.litValue) := wdata(5, 0)
     }.elsewhen(csr_addr === CSR.mip) {
       regs(CSR.mip.litValue) := (wdata(7) << 7.U).asUInt | (wdata(3) << 3.U).asUInt
     }.elsewhen(csr_addr === CSR.mie) {
       regs(CSR.mie.litValue) := (wdata(7) << 7.U).asUInt | (wdata(3) << 3.U).asUInt
     }.elsewhen(csr_addr === CSR.mepc) {
       regs(CSR.mepc.litValue) := (wdata >> 2.U) << 2.U
+    }.elsewhen(csr_addr === CSR.mtvec) {
+      regs(CSR.mtvec.litValue) := (wdata >> 2.U << 4.U)
     }.elsewhen(csr_addr === CSR.mcause) {
       regs(CSR.mcause.litValue) := wdata & ((BigInt(1) << 31) | 0xf).U
     }.elsewhen(csr_addr === CSR.timew || csr_addr === CSR.mtime) {
@@ -252,10 +288,10 @@ class CSRTester(c: => CSR, trace: Boolean = false) extends BasicTester with Test
   val epc = Wire(UInt())
   val evec = Wire(UInt())
   epc := regs(CSR.mepc.litValue)
-  evec := regs(CSR.mtvec.litValue) + (prv << 6.U).asUInt
+  evec := regs(CSR.mtvec.litValue)
 
   when(done) { stop() }
-  when(cntr.orR) {
+  when(cntr.orR && (csr_addr =/= CSR.mstatus)) {
     assert(dut.io.out === rdata)
     assert(dut.io.epc === epc)
     assert(dut.io.evec === evec)
