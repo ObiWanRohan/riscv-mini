@@ -693,7 +693,7 @@ class CSR(val xlen: Int) extends Module {
           MTIE := wdata(7)
           MSIE := wdata(3)
         }
-        .elsewhen(csr_addr === CSR.mtvec) { _mtvec.base := wdata }
+        .elsewhen(csr_addr === CSR.mtvec) { _mtvec.base := (wdata >> 2.U << 2.U) }
         .elsewhen(csr_addr === CSR.mcycle) { cycle := wdata }
         .elsewhen(csr_addr === CSR.mcycleh) { cycleh := wdata }
         .elsewhen(csr_addr === CSR.minstret) { cycle := wdata }
