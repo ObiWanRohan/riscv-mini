@@ -9,7 +9,7 @@
 #include <cassert>
 
 mm_magic_t::mm_magic_t(size_t size, size_t word_size):
-  data(new char[size]),
+  data(new uint8_t[size]),
   size(size),
   word_size(word_size), 
   store_inflight(false)
@@ -22,31 +22,31 @@ mm_magic_t::~mm_magic_t()
   delete [] data;
 }
 
-void mm_magic_t::write(uint64_t addr, char *data) {
+void mm_magic_t::write(uint64_t addr, uint8_t *data) {
   addr %= this->size;
 
-  char* base = this->data + addr;
+  uint8_t* base = this->data + addr;
   memcpy(base, data, word_size);
 }
 
-void mm_magic_t::write(uint64_t addr, char *data, uint64_t strb, uint64_t size)
+void mm_magic_t::write(uint64_t addr, uint8_t *data, uint64_t strb, uint64_t size)
 {
   strb &= ((1L << size) - 1) << (addr % word_size);
   addr %= this->size;
 
-  char *base = this->data + addr;
+  uint8_t *base = this->data + addr;
   for (int i = 0; i < word_size; i++) {
     if (strb & 1) base[i] = data[i];
     strb >>= 1;
   }
 }
 
-std::vector<char> mm_magic_t::read(uint64_t addr)
+std::vector<uint8_t> mm_magic_t::read(uint64_t addr)
 {
   addr %= this->size;
 
-  char *base = this->data + addr;
-  return std::vector<char>(base, base + word_size);
+  uint8_t *base = this->data + addr;
+  return std::vector<uint8_t>(base, base + word_size);
 }
 
 void mm_magic_t::tick(
@@ -94,7 +94,7 @@ void mm_magic_t::tick(
   }
 
   if (w_fire) {
-    write(store_addr, (char*)w_data, w_strb, store_size);
+    write(store_addr, (uint8_t*)w_data, w_strb, store_size);
     store_addr += store_size;
     store_count--;
 
@@ -120,7 +120,7 @@ void mm_magic_t::tick(
   }
 }
 
-void load_mem(char* mem, const char* fn)
+void load_mem(uint8_t* mem, const char* fn)
 {
   int start = 0;
   std::ifstream in(fn);
