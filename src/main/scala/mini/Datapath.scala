@@ -9,6 +9,7 @@ import chisel3.experimental.BundleLiterals._
 import mini.common._
 import mini.common.RISCVConstants._
 import mini.DatapathStages._
+import scala.collection.mutable
 
 object Const {
   val PC_START = 0x1200
@@ -220,6 +221,50 @@ class Datapath(val conf: CoreConfig) extends Module {
   forwardingUnit.io.mw_reg := memoryStage.io.mw_reg
   forwardingUnit.io.writeback := writebackStage.io.writeback
 
+  if (conf.traceStack) {
+    when(!full_stall) {
+
+      // Condition for func call - JALR x1, rs, 0
+      // Condition for return - RET = JALR x0, x1, 0
+
+      // val funcStack = scala.collection.mutable.Stack[Option[BigInt]]()
+
+      val FUNC_CALL_INST_JALR = BitPat("b000000000000?????000000011100111")
+      val FUNC_CALL_INST_JAL = BitPat("b????????????????????000011101111")
+      val FUNC_RET_INST = 0x00008067.U
+      when(
+        (executeStage.io.de_reg.inst === FUNC_CALL_INST_JALR) || (executeStage.io.de_reg.inst === FUNC_CALL_INST_JAL)
+      ) {
+        printf("pc=[%x] Calling function at %x\n", executeStage.io.de_reg.pc, executeStage.io.alu.sum)
+
+        // funcStack.push(executeStage.io.de_reg.pc.litOption)
+        // printf(
+        //   funcStack
+        //     .map(_ match {
+        //       case Some(x) => x
+        //       case None    => " "
+        //     })
+        //     .mkString("Stack : ", ", ", "\n")
+        // )
+
+      }.elsewhen(executeStage.io.de_reg.inst === FUNC_RET_INST) {
+
+        printf("pc=[%x] Returning from function to %x\n", executeStage.io.de_reg.pc, executeStage.io.alu.sum)
+
+        // funcStack.pop()
+        // printf(
+        //   funcStack
+        //     .map(_ match {
+        //       case Some(x) => x
+        //       case None    => " "
+        //     })
+        //     .mkString("Stack : ", ", ", "\n")
+        // )
+
+      }
+
+    }
+  }
   // TODO: re-enable through AOP
   // if (conf.trace) {
   //   printf(
