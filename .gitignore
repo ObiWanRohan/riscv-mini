@@ -9,6 +9,7 @@ project/target
 .ivy2
 VTile
 dump.vcd*
+VCDumps/*
 DVEfiles
 riscv-tools-priv1.7
 tests/32/*
@@ -26,6 +27,7 @@ tests/64/*
 .bloop/
 .metals/
 .vscode/
+gtkw/
 
 # Synopsys Verdi
 novas_dump.log
