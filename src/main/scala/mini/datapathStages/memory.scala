@@ -188,7 +188,7 @@ class MemoryStage(val conf: CoreConfig) extends Module {
 
   // Use data from memory if the memory request was valid in the previous cycle
   // i.e the data is being written in the current cycle. Otherwise send data from CSR
-  io.host.tohost := Mux(tohost_mem_req, tohost_reg, csr.io.host.tohost)
+  io.host.tohost := Mux(RegNext(tohost_mem_req), tohost_reg, csr.io.host.tohost)
 
   io.mw_reg := mw_reg
   io.illegal := illegal
