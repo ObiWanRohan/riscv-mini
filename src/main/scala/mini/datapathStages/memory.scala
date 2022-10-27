@@ -67,14 +67,18 @@ class MemoryStage(val conf: CoreConfig) extends Module {
 //   Load
   val loffset = (io.em_reg.alu(1) << 4.U).asUInt | (io.em_reg.alu(0) << 3.U).asUInt
   val lshift = io.dcache.resp.bits.data >> loffset
-  load := MuxLookup(
-    io.em_reg.ctrl.ld_type.asUInt,
-    io.dcache.resp.bits.data.zext,
-    Seq(
-      LdType.LD_LH.asUInt -> lshift(15, 0).asSInt,
-      LdType.LD_LB.asUInt -> lshift(7, 0).asSInt,
-      LdType.LD_LHU.asUInt -> lshift(15, 0).zext,
-      LdType.LD_LBU.asUInt -> lshift(7, 0).zext
+  load := Mux(
+    io.em_reg.ctrl.ld_type.asUInt.orR && (io.em_reg.alu === Const.FROMHOST_ADDR.U) && io.host.fromhost.valid,
+    io.host.fromhost.bits.asSInt,
+    MuxLookup(
+      io.em_reg.ctrl.ld_type.asUInt,
+      io.dcache.resp.bits.data.zext,
+      Seq(
+        LdType.LD_LH.asUInt -> lshift(15, 0).asSInt,
+        LdType.LD_LB.asUInt -> lshift(7, 0).asSInt,
+        LdType.LD_LHU.asUInt -> lshift(15, 0).zext,
+        LdType.LD_LBU.asUInt -> lshift(7, 0).zext
+      )
     )
   )
   // CSR access -----------------------------VERIFY CSR EXECUTE / MEMORY PIPELINE ACCESS BELOW
@@ -103,7 +107,7 @@ class MemoryStage(val conf: CoreConfig) extends Module {
   val woffset = (io.em_reg.alu(1) << 4.U).asUInt | (io.em_reg.alu(0) << 3.U).asUInt
 
   val tohost_reg = Reg(UInt(conf.xlen.W))
-  val tohost_mem_req = memReqValid && io.em_reg.ctrl.st_type.asUInt.orR && (daddr === Const.HOST_ADDR.U)
+  val tohost_mem_req = memReqValid && io.em_reg.ctrl.st_type.asUInt.orR && (daddr === Const.TOHOST_ADDR.U)
 
   val storeMaskControlBits = MuxLookup(
     io.em_reg.ctrl.st_type.asUInt,

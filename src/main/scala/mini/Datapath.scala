@@ -14,8 +14,12 @@ import scala.collection.mutable
 object Const {
   val PC_START = 0x1200
   val PC_EVEC = 0x100
-  // Memory Mapped IO address
-  val HOST_ADDR = 0xf000
+  // Memory Mapped IO addresses
+
+  // HTIF Addresses
+  val TOHOST_ADDR = 0xf000
+  // fromhost is aligned to 64 bytes after tohost
+  val FROMHOST_ADDR = ((TOHOST_ADDR + 64 - 1) & ~(64 - 1))
 }
 
 class DatapathIO(xlen: Int) extends Bundle {
