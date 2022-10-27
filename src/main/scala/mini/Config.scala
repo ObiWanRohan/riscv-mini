@@ -13,8 +13,8 @@ object MiniConfig {
       core = CoreConfig(
         trace = false,
         xlen = xlen,
-        makeAlu = new AluArea(_),
-        makeBrCond = new BrCondArea(_),
+        makeAlu = new AluSimple(_),
+        makeBrCond = new BrCondSimple(_),
         makeImmGen = new ImmGenWire(_),
         makeForwardingUnit = new ForwardingUnit(_)
       ),
