@@ -7,6 +7,10 @@
 
 #include "mm.h"
 
+// Data passed on tohost to indicate pass
+#define TOHOST_PASS_DATA 1
+#define CYCLE_TIME 2
+
 using namespace std;
 
 vluint64_t main_time = 0;       // Current simulation time
@@ -121,6 +125,8 @@ int main(int argc, char** argv) {
   mem = new mm_magic_t(1L << 32, 8); // target memory
   load_mem(mem->get_data(), hexFileName); // load hex
 
+  vector<pair<uint64_t, int>> tohost_history;
+
 #if VM_TRACE			// If verilator was invoked with --trace
   Verilated::traceEverOn(true);	// Verilator must compute traced signals
   VL_PRINTF("Enabling waves...\n");
@@ -139,29 +145,61 @@ int main(int argc, char** argv) {
 
   // start
   top->reset = 0;
-  top->io_host_fromhost_bits = 0;
-  top->io_host_fromhost_valid = 0;
+  top->io_host_fromhost_bits = 1;
+  top->io_host_fromhost_valid = 1;
   do {
     tick();
-  } while(!top->io_host_tohost && main_time < timeout);
+    if(top->io_host_tohost != 0) {
+      tohost_history.push_back(make_pair(main_time, top->io_host_tohost));
+    }
+  } while((top->io_host_tohost != TOHOST_PASS_DATA) && main_time < timeout);
 
-  int retcode = top->io_host_tohost >> 1;
+  int retcode;
+  bool success, timed_out;
+
+  // Checking if any value was returned
+  if(tohost_history.size()) {
+
+    auto last_index = tohost_history.size() - 1;
+
+    retcode = tohost_history[last_index].second >> 1;
+
+    success = (retcode == 0) ? true : false;
+    timed_out = false;
+
+
+  } else {
+
+    retcode = 0;
+    success = false;
+    timed_out = true;
+
+  }
 
   // Run for 10 more clocks
   for (size_t i = 0 ; i < 10 ; i++) {
     tick();
   }
 
-  if (main_time >= timeout) {
-    cerr << "Simulation terminated by timeout at time " << main_time
-         << " (cycle " << main_time / 10 << ")"<< endl;
-    return EXIT_FAILURE;
-  } else {
-    cerr << "Simulation completed at time " << main_time <<
-           " (cycle " << main_time / 10 << ")"<< endl;
-    if (retcode) {
+  cerr << "To host history : \n";
+  for(int i = 0; i < tohost_history.size(); i++) {
+    cerr << "Time " << tohost_history[i].first << " : " << tohost_history[i].second << "\n";
+  }
+
+  if (!success) {
+    if (timed_out) {
+      cerr << "FAIL : Simulation terminated by timeout at time " << main_time
+          << " (cycle " << main_time / CYCLE_TIME << ")"<< endl;
+      return EXIT_FAILURE;
+    } else {
+      cerr << "FAIL : Simulation complleted with return code "<< retcode <<" at time " << main_time
+          << " (cycle " << main_time / CYCLE_TIME << ")"<< endl;
       cerr << "TOHOST = " << retcode << endl;
+      return EXIT_FAILURE;
     }
+  } else {
+    cerr << "PASS : Simulation completed at time " << main_time <<
+           " (cycle " << main_time / CYCLE_TIME << ")"<< endl;
   }
 
 #if VM_TRACE
