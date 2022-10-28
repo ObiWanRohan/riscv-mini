@@ -130,10 +130,11 @@ int main(int argc, char **argv)
   cout << "Writing to VCD File : '" << vcdFileName << "'\n";
   cout << "Max Cycles : '" << timeout << "'\n";
 
-  Verilated::commandArgs(argc, argv);     // Remember args
-  top = new VTile;                        // target design
-  mem = new mm_magic_t(1L << 32, 8);      // target memory
-  load_mem(mem->get_data(), hexFileName); // load hex
+
+  Verilated::commandArgs(argc, argv);   // Remember args
+  top = new VTile;                      // target design
+  mem = new mm_magic_t(1L << 32, 8);    // target memory
+  mem->load_mem(hexFileName);           // load hex
 
   vector<pair<uint64_t, int>> tohost_history;
 
