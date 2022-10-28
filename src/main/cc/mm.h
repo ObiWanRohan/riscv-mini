@@ -36,6 +36,8 @@ class mm_magic_t
   uint8_t* get_data() { return data; }
   size_t get_size() { return size; }
 
+  void load_mem(const char* fn);
+
   bool ar_ready() { return true; }
   bool aw_ready() { return !store_inflight; }
   bool w_ready() { return store_inflight; }
@@ -95,5 +97,4 @@ class mm_magic_t
   uint64_t cycle;
 };
 
-void load_mem(uint8_t* mem, const char* fn);
 #endif

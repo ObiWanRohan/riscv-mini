@@ -120,7 +120,7 @@ void mm_magic_t::tick(
   }
 }
 
-void load_mem(uint8_t* mem, const char* fn)
+void mm_magic_t::load_mem(const char* fn)
 {
   int start = 0;
   std::ifstream in(fn);
@@ -135,7 +135,7 @@ void load_mem(uint8_t* mem, const char* fn)
   {
     #define parse_nibble(c) ((c) >= 'a' ? (c)-'a'+10 : (c)-'0')
     for (int i = line.length()-2, j = 0; i >= 0; i -= 2, j++) {
-      mem[start + j] = (parse_nibble(line[i]) << 4) | parse_nibble(line[i+1]);
+      data[start + j] = (parse_nibble(line[i]) << 4) | parse_nibble(line[i+1]);
     }
     start += line.length()/2;
   }
