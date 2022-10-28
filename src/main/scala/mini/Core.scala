@@ -7,7 +7,7 @@ import chisel3.util.Valid
 
 case class CoreConfig(
   trace:              Boolean = false,
-  traceStack:         Boolean = true,
+  traceStack:         Boolean = false,
   xlen:               Int,
   makeAlu:            Int => Alu = new AluSimple(_),
   makeBrCond:         Int => BrCond = new BrCondSimple(_),
