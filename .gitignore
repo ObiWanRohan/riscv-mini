@@ -33,3 +33,7 @@ gtkw/
 novas_dump.log
 ucli.key
 
+
+#gtkwave config files
+*.gtkw
+VCDumps
