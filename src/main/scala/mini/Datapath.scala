@@ -240,6 +240,50 @@ class Datapath(val conf: CoreConfig) extends Module {
   // Abort store when there's an excpetion
   io.dcache.abort := csr.io.expt
 
+  if (conf.traceStack) {
+    when(!stall) {
+
+      // Condition for func call - JALR x1, rs, 0
+      // Condition for return - RET = JALR x0, x1, 0
+
+      // val funcStack = scala.collection.mutable.Stack[Option[BigInt]]()
+
+      val FUNC_CALL_INST_JALR = BitPat("b000000000000?????000000011100111")
+      val FUNC_CALL_INST_JAL = BitPat("b????????????????????000011101111")
+      val FUNC_RET_INST = 0x00008067.U
+      when(
+        (fe_reg.inst === FUNC_CALL_INST_JALR) || (fe_reg.inst === FUNC_CALL_INST_JAL)
+      ) {
+        printf("pc=[%x] Calling function at %x\n", fe_reg.pc, alu.io.sum)
+
+        // funcStack.push(executeStage.io.de_reg.pc.litOption)
+        // printf(
+        //   funcStack
+        //     .map(_ match {
+        //       case Some(x) => x
+        //       case None    => " "
+        //     })
+        //     .mkString("Stack : ", ", ", "\n")
+        // )
+
+      }.elsewhen(fe_reg.inst === FUNC_RET_INST) {
+
+        printf("pc=[%x] Returning from function to %x\n", fe_reg.pc, alu.io.sum)
+
+        // funcStack.pop()
+        // printf(
+        //   funcStack
+        //     .map(_ match {
+        //       case Some(x) => x
+        //       case None    => " "
+        //     })
+        //     .mkString("Stack : ", ", ", "\n")
+        // )
+
+      }
+
+    }
+  }
   // TODO: re-enable through AOP
 //  if (p(Trace)) {
 //    printf(
