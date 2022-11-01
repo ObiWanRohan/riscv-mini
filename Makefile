@@ -20,6 +20,8 @@ sbt:
 
 compile: $(gen_dir)/Tile.v
 
+synth: $(gen_dir)/TileSynth.v
+
 $(gen_dir)/Tile.v: $(scala_src)
 	$(SBT) $(SBT_FLAGS) "run $(gen_dir)"
 
