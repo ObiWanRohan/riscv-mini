@@ -385,7 +385,7 @@ class CSR(val xlen: Int) extends Module {
   )
 
   // Shifting the base by 2 as it is supposed to be aligned to 4 bytes
-  val mtvec = Cat(_mtvec.base >> 2, _mtvec.mode)
+  val mtvec = Cat(_mtvec.base, _mtvec.mode)
   val medeleg = RegInit(0x0.U(xlen.W))
   val mideleg = RegInit(0x0.U(xlen.W))
 
@@ -693,7 +693,7 @@ class CSR(val xlen: Int) extends Module {
           MTIE := wdata(7)
           MSIE := wdata(3)
         }
-        .elsewhen(csr_addr === CSR.mtvec) { _mtvec.base := (wdata >> 2.U << 2.U) }
+        .elsewhen(csr_addr === CSR.mtvec) { _mtvec.base := (wdata >> 2.U) }
         .elsewhen(csr_addr === CSR.mcycle) { cycle := wdata }
         .elsewhen(csr_addr === CSR.mcycleh) { cycleh := wdata }
         .elsewhen(csr_addr === CSR.minstret) { cycle := wdata }
