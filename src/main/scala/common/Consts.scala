@@ -5,6 +5,7 @@ import chisel3._
 object RISCVConstants {
 
   // abstract out instruction decode magic numbers
+  val REG_COUNT = 32
   val REG_ADDR_WIDTH = 5.W
 
   // Destination register address
