@@ -128,8 +128,8 @@ int main(int argc, char** argv) {
 
   Verilated::commandArgs(argc, argv);   // Remember args
   top = new VTile; // target design
-  mem = new mm_magic_t(1L << 32, 8); // target memory
-  mem->load_mem(hexFileName, memStartAddress); // load hex
+  mem = new mm_magic_t(1L << 20, 8, memStartAddress); // target memory
+  mem->load_mem(hexFileName); // load hex
 
   vector<pair<uint64_t, int>> tohost_history;
 

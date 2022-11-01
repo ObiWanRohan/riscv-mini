@@ -2,20 +2,25 @@
 
 #include "mm.h"
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <cstdlib>
 #include <cstring>
 #include <string>
 #include <cassert>
 
+#define combine_word_from_bytes(x) (x[3] << 24 | x[2] << 16 | x[1] << 8 | x[0])
+
+#define cout_hex_word(x) std::hex << std::setw(8) << std::setfill('0') << x
 
 /*
   Create memory of <size> bytes and having a word size of <word_size>
 */
-mm_magic_t::mm_magic_t(size_t size, size_t word_size):
+mm_magic_t::mm_magic_t(size_t size, size_t word_size, size_t start_addr):
   data(new uint8_t[size]),
   size(size),
   word_size(word_size), 
+  start_addr(start_addr),
   store_inflight(false)
 {
   dummy_data.resize(word_size);
@@ -45,7 +50,13 @@ void mm_magic_t::write(uint64_t addr, uint8_t *data) {
 void mm_magic_t::write(uint64_t addr, uint8_t *data, uint64_t strb, uint64_t size)
 {
   strb &= ((1L << size) - 1) << (addr % word_size);
+
+  std::cout << "[Write] Converting " << cout_hex_word(addr) << " to ";
+
+  addr -= start_addr;
   addr %= this->size;
+
+  std::cout << cout_hex_word(addr) << "\n";
 
   uint8_t *base = this->data + addr;
   for (int i = 0; i < word_size; i++) {
@@ -60,10 +71,21 @@ void mm_magic_t::write(uint64_t addr, uint8_t *data, uint64_t strb, uint64_t siz
 */
 std::vector<uint8_t> mm_magic_t::read(uint64_t addr)
 {
+
+  std::cout << "[Read] Converting " << std::hex << addr << " to ";
+
+  addr -= this->start_addr;
   addr %= this->size;
 
+  std::cout << addr << "\n";
+
+
   uint8_t *base = this->data + addr;
-  return std::vector<uint8_t>(base, base + word_size);
+
+  auto result = std::vector<uint8_t>(base, base + word_size);
+  std::cout << "Data : " << cout_hex_word(combine_word_from_bytes(result)) << "\n";
+
+  return result;
 }
 
 void mm_magic_t::tick(
@@ -111,6 +133,11 @@ void mm_magic_t::tick(
   }
 
   if (w_fire) {
+
+    uint8_t* write_data = (uint8_t*)w_data;
+
+    std::cout << "[Write] " << cout_hex_word(store_addr) << "\n";
+
     write(store_addr, (uint8_t*)w_data, w_strb, store_size);
     store_addr += store_size;
     store_count--;
@@ -137,9 +164,9 @@ void mm_magic_t::tick(
   }
 }
 
-void mm_magic_t::load_mem(const char* fn, size_t start_address)
+void mm_magic_t::load_mem(const char* fn)
 {
-  int start = start_address;
+  int start = 0;
   std::ifstream in(fn);
   if (!in)
   {

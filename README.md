@@ -40,7 +40,7 @@ Now, you can run verilator simulation for a given hex file as follows:
 
 The following command runs the whole test hex files in verilator and dumps the traces and the waveforms to the 'outputs' directory:
 
-    $ make run-tests
+    $ make run-tests VTILE_CYCLES=100000 TILE_MEM_START_ADDR=0x7FFFF000
 
 ### Generating hex binary for verilator
 The current tests are from the [`riscv-tests`](https://github.com/riscv-software-src/riscv-tests) repository. They are compiled with `riscv64-unknown-elf-gcc` with `-march=rv32i` and `-mabi=ilp32` compiler options. The ELF binary are exported to hex using `elf2hex`. (Get the elf2hex executable from the [SiFive Github](https://github.com/sifive/elf2hex))
