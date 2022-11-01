@@ -8,6 +8,10 @@
 #include <string>
 #include <cassert>
 
+
+/*
+  Create memory of <size> bytes and having a word size of <word_size>
+*/
 mm_magic_t::mm_magic_t(size_t size, size_t word_size):
   data(new uint8_t[size]),
   size(size),
@@ -22,12 +26,21 @@ mm_magic_t::~mm_magic_t()
   delete [] data;
 }
 
+/*
+  Write data to address.
+  Only the first <word_size> bytes of <data> are written.
+*/
 void mm_magic_t::write(uint64_t addr, uint8_t *data) {
   addr %= this->size;
 
   uint8_t* base = this->data + addr;
   memcpy(base, data, word_size);
 }
+
+/*
+  Write data to address.
+  The data should have a size of <word_size> bytes
+*/
 
 void mm_magic_t::write(uint64_t addr, uint8_t *data, uint64_t strb, uint64_t size)
 {
@@ -41,6 +54,10 @@ void mm_magic_t::write(uint64_t addr, uint8_t *data, uint64_t strb, uint64_t siz
   }
 }
 
+/*
+  Read data from address
+  <word_size> bytes are returned.
+*/
 std::vector<uint8_t> mm_magic_t::read(uint64_t addr)
 {
   addr %= this->size;
@@ -120,9 +137,9 @@ void mm_magic_t::tick(
   }
 }
 
-void mm_magic_t::load_mem(const char* fn)
+void mm_magic_t::load_mem(const char* fn, size_t start_address)
 {
-  int start = 0;
+  int start = start_address;
   std::ifstream in(fn);
   if (!in)
   {

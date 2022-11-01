@@ -43,7 +43,8 @@ The following command runs the whole test hex files in verilator and dumps the t
     $ make run-tests
 
 ### Generating hex binary for verilator
-The current tests are from the [`riscv-tests`](https://github.com/riscv-software-src/riscv-tests) repository. They are compiled with `riscv64-unknown-elf-gcc` with `-march=rv32i` and `-mabi=ilp32` compiler options. The ELF binary are exported to hex using `elf2hex`.
+The current tests are from the [`riscv-tests`](https://github.com/riscv-software-src/riscv-tests) repository. They are compiled with `riscv64-unknown-elf-gcc` with `-march=rv32i` and `-mabi=ilp32` compiler options. The ELF binary are exported to hex using `elf2hex`. (Get the elf2hex executable from the [SiFive Github](https://github.com/sifive/elf2hex))
+
 The riscv-tools are setup using [`chipyard`](https://github.com/ucb-bar/chipyard).
 A custom linker script has been used to set the start address to `0x200` (This is the PC_START)
 

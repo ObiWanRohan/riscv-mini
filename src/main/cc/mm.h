@@ -36,7 +36,7 @@ class mm_magic_t
   uint8_t* get_data() { return data; }
   size_t get_size() { return size; }
 
-  void load_mem(const char* fn);
+  void load_mem(const char* fn, size_t start_address);
 
   bool ar_ready() { return true; }
   bool aw_ready() { return !store_inflight; }
