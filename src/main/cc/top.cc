@@ -83,10 +83,11 @@ int main(int argc, char** argv) {
 
   const char* vcdFileName = NULL;
   uint64_t timeout = 500;
+  uint64_t memStartAddress = 0;
 
   const char* hexFileName = NULL;
 
-  const char* helpMessage = "usage: VTile <hex filename> [-v <vcd filename>] [-h | --help] [-t <timeout>]";
+  const char* helpMessage = "usage: VTile <hex filename> [-v <vcd filename>] [-h | --help] [-t <timeout>] [-s | --start-address <address>]";
 
   if (argc < 2) {
     cerr << "Incorrect Usage.\n" << helpMessage << endl;
@@ -101,7 +102,11 @@ int main(int argc, char** argv) {
       continue;
     }
     else if (arg == "-t") {
-      timeout = atoll(argv[i + 1]);
+      timeout = stoull(argv[i + 1]);
+      continue;
+    }
+    else if (arg == "-s" || arg == "--start-address") {
+      memStartAddress = stoull(argv[i + 1], nullptr, 0);
       continue;
     }
     else if (arg == "--help" || arg == "-h") {
@@ -118,11 +123,12 @@ int main(int argc, char** argv) {
   cout << "Using hex file : '" << hexFileName << "'\n";
   cout << "Writing to VCD File : '" << vcdFileName << "'\n";
   cout << "Max Cycles : '" << timeout << "'\n";
+  cout << "Memory Start Address : '" << memStartAddress << "'\n";
 
 
   Verilated::commandArgs(argc, argv);   // Remember args
   top = new VTile; // target design
-  mem = new mm_magic_t(1L << 32, 8); // target memory
+  mem = new mm_magic_t(1L << 20, 8, memStartAddress); // target memory
   mem->load_mem(hexFileName); // load hex
 
   vector<pair<uint64_t, int>> tohost_history;

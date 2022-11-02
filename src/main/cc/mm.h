@@ -30,7 +30,7 @@ struct mm_rresp_t
 class mm_magic_t
 {
  public:
-  mm_magic_t(size_t size, size_t word_size);
+  mm_magic_t(size_t size, size_t word_size, size_t start_addr);
   ~mm_magic_t();
   void init(size_t sz, int word_size);
   uint8_t* get_data() { return data; }
@@ -83,6 +83,7 @@ class mm_magic_t
   uint8_t* data;
   size_t size;
   size_t word_size;
+  size_t start_addr;
 
   bool store_inflight;
   uint64_t store_addr;

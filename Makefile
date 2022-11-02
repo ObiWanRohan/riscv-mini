@@ -11,6 +11,7 @@ SBT       = sbt
 SBT_FLAGS = -Dsbt.ivy.home="$(base_dir)/.ivy2"
 
 VTILE_CYCLES = 50000
+TILE_MEM_START_ADDR = 0
 
 scala_src = $(shell find $(src_dir)/scala -type f -name '*.scala')
 
@@ -42,7 +43,7 @@ test_out_files = $(foreach f,$(test_hex_files),$(patsubst %.hex,%.out,$(out_dir)
 
 $(test_out_files): $(out_dir)/%.out: $(base_dir)/VTile $(base_dir)/tests/%.hex
 	mkdir -p $(out_dir)
-	$^ $(patsubst %.out,-v %.vcd,$@) -t $(VTILE_CYCLES) 2> >(tee $@)
+	$^ $(patsubst %.out,-v %.vcd,$@) -t $(VTILE_CYCLES) -s $(TILE_MEM_START_ADDR) 2> >(tee $@)
 
 run-tests: $(test_out_files)
 
@@ -54,7 +55,7 @@ $(benchmark_out_files): $(benchmark_out_dir)/%.out: $(base_dir)/VTile $(base_dir
 	mkdir -p $(out_dir)/benchmarks
 	# Commented as it produces too much output
 	# $^ $(patsubst %.out,-v %.vcd,$@) -t $(VTILE_CYCLES) 2> >(tee $@)
-	$^ $(patsubst %.out,-v %.vcd,$@) -t $(VTILE_CYCLES) 2>&1 >$@
+	$^ $(patsubst %.out,-v %.vcd,$@) -t $(VTILE_CYCLES) -s $(TILE_MEM_START_ADDR) 2>&1 >$@
 
 run-benchmarks: $(benchmark_out_files)
 

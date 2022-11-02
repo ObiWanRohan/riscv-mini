@@ -12,12 +12,12 @@ import mini.DatapathStages._
 import scala.collection.mutable
 
 object Const {
-  val PC_START = 0x1200
+  val PC_START = BigInt("80000000", 16)
   val PC_EVEC = 0x100
-  // Memory Mapped IO addresses
 
+  // Memory Mapped IO addresses
   // HTIF Addresses
-  val TOHOST_ADDR = 0xf000
+  val TOHOST_ADDR = BigInt("7ffff000", 16)
   // fromhost is aligned to 64 bytes after tohost
   val FROMHOST_ADDR = ((TOHOST_ADDR + 64 - 1) & ~(64 - 1))
 }

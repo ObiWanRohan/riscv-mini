@@ -49,7 +49,7 @@ jobs:
       with:
         java-version: openjdk@1.11
     - name: Makefile Integration Tests
-      run: make run-tests
+      run: make run-tests VTILE_CYCLES=10000 TILE_MEM_START_ADDR=0x7FFFF000
 
   benchmarks:
     name: Makefile based Benchmarks
@@ -65,7 +65,7 @@ jobs:
       with:
         java-version: openjdk@1.11
     - name: Makefile Integration Tests
-      run: make run-benchmarks
+      run: make run-benchmarks VTILE_CYCLES=10000000 TILE_MEM_START_ADDR=0x7FFFF000
 
   doc:
     name: Documentation and Formatting
