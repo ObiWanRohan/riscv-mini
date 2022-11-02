@@ -29,6 +29,14 @@ class AluIO(width: Int) extends Bundle {
   val out = Output(UInt(width.W))
   val sum = Output(UInt(width.W))
 }
+class HalfAluIO(width: Int) extends Bundle {
+  val A = Input(UInt(width.W))
+  val B = Input(UInt(width.W))
+  val cin = Input(UInt(1.W))
+  val alu_op = Input(AluSel())
+  val pout = Output(UInt(width.W))
+  val cout = Output(1.W)
+}
 
 import mini.AluSel._
 
@@ -102,4 +110,34 @@ class AluArea(val width: Int) extends Alu {
 
   io.out := out
   io.sum := sum
+}
+
+class AluHalf(val width: Int) extends Alu {
+  val io = IO(new HalfAluIO(width / 2))
+
+  // shift-amount
+  val shamt = io.B(4, 0).asUInt
+  // partial alu result
+  val presult = Wire(UInt(width / 2 + 1))
+
+  presult := MuxLookup(
+    io.alu_op.asUInt,
+    io.B,
+    Seq(
+      // create alu_utils for custom HW implimentaitons
+      ALU_ADD.asUInt -> (io.A + io.B + io.cin),
+      ALU_SUB.asUInt -> (io.A - io.B),
+      ALU_SRA.asUInt -> (io.A.asSInt >> shamt).asUInt,
+      ALU_SRL.asUInt -> (io.A >> shamt),
+      ALU_SLL.asUInt -> (io.A << shamt),
+      ALU_SLT.asUInt -> (io.A.asSInt < io.B.asSInt),
+      ALU_SLTU.asUInt -> (io.A < io.B),
+      ALU_AND.asUInt -> (io.A & io.B),
+      ALU_OR.asUInt -> (io.A | io.B),
+      ALU_XOR.asUInt -> (io.A ^ io.B),
+      ALU_COPY_A.asUInt -> io.A
+    )
+  )
+  io.pout := presult(15, 0)
+  io.cout := presult(16)
 }

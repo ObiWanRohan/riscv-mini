@@ -14,6 +14,7 @@ object MiniConfig {
         trace = false,
         xlen = xlen,
         makeAlu = new AluSimple(_),
+        makeAluHalf = new AluHalf(_),
         makeBrCond = new BrCondSimple(_),
         makeImmGen = new ImmGenWire(_),
         makeForwardingUnit = new ForwardingUnit(_)
