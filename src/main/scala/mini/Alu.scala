@@ -29,20 +29,20 @@ class AluIO(width: Int) extends Bundle {
   val out = Output(UInt(width.W))
   val sum = Output(UInt(width.W))
 }
-class HalfAluIO(width: Int) extends Bundle {
+class AluStageIO(width: Int) extends Bundle {
   val A = Input(UInt(width.W))
   val B = Input(UInt(width.W))
-  val cin = Input(UInt(1.W))
+  val Cin = Input(UInt(1.W))
   val alu_op = Input(AluSel())
-  val pout = Output(UInt(width.W))
-  val cout = Output(1.W)
+  val Pout = Output(UInt(width.W))
+  val Cout = Output(UInt(1.W))
 }
 
 import mini.AluSel._
 
 trait Alu extends Module {
   def width: Int
-  val io: AluIO
+  val io: AluStageIO
 }
 
 class AluSimple(val width: Int) extends Alu {
@@ -112,21 +112,22 @@ class AluArea(val width: Int) extends Alu {
   io.sum := sum
 }
 
-class AluHalf(val width: Int) extends Alu {
-  val io = IO(new HalfAluIO(width / 2))
+class AluStage(val width: Int) extends Alu {
+  val io = IO(new AluStageIO(width / 2))
 
   // shift-amount
   val shamt = io.B(4, 0).asUInt
   // partial alu result
-  val presult = Wire(UInt(width / 2 + 1))
+  val presult = Wire(Int(width / 2 + 1))
+  val carry = Mux(io.alu_op === ALU_SUB, 1.U, io.Cin)
 
   presult := MuxLookup(
     io.alu_op.asUInt,
     io.B,
     Seq(
-      // create alu_utils for custom HW implimentaitons
-      ALU_ADD.asUInt -> (io.A + io.B + io.cin),
-      ALU_SUB.asUInt -> (io.A - io.B),
+      // use alu_utils for custom HW implimentaitons -- barrel shifter, parallel-prefix add/sub
+      ALU_ADD.asUInt -> (io.A + io.B + io.Cin),
+      ALU_SUB.asUInt -> (io.A + ~io.B + carry),
       ALU_SRA.asUInt -> (io.A.asSInt >> shamt).asUInt,
       ALU_SRL.asUInt -> (io.A >> shamt),
       ALU_SLL.asUInt -> (io.A << shamt),
@@ -138,6 +139,6 @@ class AluHalf(val width: Int) extends Alu {
       ALU_COPY_A.asUInt -> io.A
     )
   )
-  io.pout := presult(15, 0)
-  io.cout := presult(16)
+  io.Pout := presult(width / 2 - 1, 0)
+  io.Cout := presult(width / 2)
 }
