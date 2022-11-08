@@ -3,6 +3,7 @@
 package mini
 
 import chisel3._
+import chisel3.util._
 import CPUControlSignalTypes._
 
 class BrCondIO(xlen: Int) extends Bundle {
@@ -57,4 +58,42 @@ class BrCondArea(val xlen: Int) extends BrCond {
       ((io.br_type === BR_GE) && ge) ||
       ((io.br_type === BR_LTU) && ltu) ||
       ((io.br_type === BR_GEU) && geu)
+}
+
+class BrCondStage(val xlen: Int) extends BrCond {
+
+  import CPUControlSignalTypes.BrType._
+
+  val io = IO(new BrCondIO(xlen))
+  val stages = List(2, 5)
+
+  // val ltu = Bool()
+
+  // need 2 stage implimentation of eq, lt and ltu
+  val sub = Module(new FastAdderPipelined(xlen, stages))
+  val diff = Wire(UInt((xlen).W))
+  val cout = Wire(UInt(1.W))
+  sub.io.a := io.rs1
+  sub.io.b := ~io.rs2
+  sub.io.cin := 1.U // using cin and adder for explicit subtraction
+  diff := sub.io.Sum
+  cout := sub.io.Cout
+
+  // val lt = cout.asBool
+  val isSameSign = io.rs1(xlen - 1) === io.rs2(xlen - 1)
+  val neq = diff.orR
+  val eq = !neq
+  val lt = Mux(isSameSign, diff(xlen - 1), io.rs1(xlen - 1))
+  val ltu = Mux(isSameSign, diff(xlen - 1), io.rs2(xlen - 1))
+  val ge = !lt
+  val geu = !ltu
+
+  io.taken :=
+    ((io.br_type === BR_EQ) && eq) ||
+      ((io.br_type === BR_NE) && neq) ||
+      ((io.br_type === BR_LT) && lt) ||
+      ((io.br_type === BR_GE) && ge) ||
+      ((io.br_type === BR_LTU) && ltu) ||
+      ((io.br_type === BR_GEU) && geu)
+
 }
