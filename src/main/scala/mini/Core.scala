@@ -9,8 +9,8 @@ case class CoreConfig(
   trace:              Boolean = false,
   traceStack:         Boolean = false,
   xlen:               Int,
-  makeAlu:            Int => Alu = new AluSimple(_),
-  makeBrCond:         Int => BrCond = new BrCondSimple(_),
+  makeAlu:            Int => Alu = new AluStage(_),
+  makeBrCond:         Int => BrCond = new BrCondStage(_),
   makeImmGen:         Int => ImmGen = new ImmGenWire(_),
   makeForwardingUnit: Int => ForwardingUnit = new ForwardingUnit(_))
 

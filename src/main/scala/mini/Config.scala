@@ -13,9 +13,9 @@ object MiniConfig {
       core = CoreConfig(
         trace = false,
         xlen = xlen,
-        makeAlu = new AluSimple(_),
-        makeAluHalf = new AluHalf(_),
-        makeBrCond = new BrCondSimple(_),
+        // makeAlu = new AluSimple(_),
+        makeAlu = new AluStage(_),
+        makeBrCond = new BrCondStage(_),
         makeImmGen = new ImmGenWire(_),
         makeForwardingUnit = new ForwardingUnit(_)
       ),
