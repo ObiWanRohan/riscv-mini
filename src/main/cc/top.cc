@@ -198,7 +198,7 @@ int main(int argc, char** argv) {
           << " (cycle " << main_time / CYCLE_TIME << ")"<< endl;
       return EXIT_FAILURE;
     } else {
-      cerr << "FAIL : Simulation complleted with return code "<< retcode <<" at time " << main_time
+      cerr << "FAIL : Simulation completed with return code "<< retcode <<" at time " << main_time
           << " (cycle " << main_time / CYCLE_TIME << ")"<< endl;
       cerr << "TOHOST = " << retcode << endl;
       return EXIT_FAILURE;
