@@ -164,4 +164,4 @@ abstract class TileTests(cfg: TestConfig, useVerilator: Boolean = false)
 
 class TileISATests extends TileTests(ISATests, true)
 class TileBmarkTests extends TileTests(BmarkTests, true)
-class TileLargeBmarkTests extends TileTests(LargeBmarkTests, true)
+// class TileLargeBmarkTests extends TileTests(LargeBmarkTests, true)

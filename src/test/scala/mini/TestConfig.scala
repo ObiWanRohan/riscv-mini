@@ -65,7 +65,7 @@ case object BmarkTests extends TestConfig {
     "qsort.riscv",
     "towers.riscv",
     "vvadd.riscv"
-  )
+  ).map(t => s"benchmarks/$t")
   val maxcycles = 1500000
   val namePrefix = "BmarkTests"
 }
