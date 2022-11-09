@@ -15,6 +15,7 @@ class AluTester(alu: => Alu) extends BasicTester with TestUtils {
   val ctrl = Module(new Control)
   val xlen = dut.width
 
+  val steps = 2 // for testing 2 stage alu
   val (cntr, done) = Counter(true.B, insts.size)
   val rs1 = Seq.fill(insts.size)(rnd.nextInt()).map(toBigInt)
   val rs2 = Seq.fill(insts.size)(rnd.nextInt()).map(toBigInt)
@@ -73,17 +74,18 @@ class AluTester(alu: => Alu) extends BasicTester with TestUtils {
   dut.io.alu_op := ctrl.io.alu_op
   dut.io.A := VecInit(rs1.map(_.U))(cntr)
   dut.io.B := VecInit(rs2.map(_.U))(cntr)
+  dut.io.Cin := 0.U
 
   when(done) { stop() }
-  assert(dut.io.out === out._1)
-  assert(dut.io.sum === out._2)
+  assert(dut.io.Out === out._1)
+  // assert(dut.io.sum === out._2)
   printf(
     "Counter: %d, OP: 0x%x, A: 0x%x, B: 0x%x, OUT: 0x%x ?= 0x%x, SUM: 0x%x ?= 0x%x\n",
     cntr,
     dut.io.alu_op.asUInt,
     dut.io.A,
     dut.io.B,
-    dut.io.out,
+    dut.io.Out,
     out._1,
     dut.io.sum,
     out._2
@@ -91,21 +93,21 @@ class AluTester(alu: => Alu) extends BasicTester with TestUtils {
 }
 
 class ALUTests extends AnyFlatSpec with ChiselScalatestTester with Formal {
-  "ALUSimple" should "pass" in {
-    test(new AluTester(new AluSimple(32))).runUntilStop()
+  "ALUStage" should "pass" in {
+    test(new AluTester(new AluStage(32))).runUntilStop()
   }
-  "AluArea" should "pass" in {
-    test(new AluTester(new AluArea(32))).runUntilStop()
-  }
-  "AluArea" should "be equivalent to AluSimple" in {
-    // since there is no state (registers/memory) in the ALU, a single cycle check is enough to prove equivalence
-    verify(new AluEquivalenceCheck(new AluArea(32)), Seq(BoundedCheck(1)))
-  }
+  // "AluArea" should "pass" in {
+  //   test(new AluTester(new AluArea(32))).runUntilStop()
+  // }
+  // "AluArea" should "be equivalent to AluSimple" in {
+  //   // since there is no state (registers/memory) in the ALU, a single cycle check is enough to prove equivalence
+  //   verify(new AluEquivalenceCheck(new AluArea(32)), Seq(BoundedCheck(1)))
+  // }
 }
 
 class AluEquivalenceCheck(other: => Alu) extends Module {
   val dut = Module(other)
-  val ref = Module(new AluSimple(dut.width))
+  val ref = Module(new AluStage(dut.width))
 
   // arbitrary inputs
   val io = IO(chiselTypeOf(dut.io))
@@ -114,6 +116,6 @@ class AluEquivalenceCheck(other: => Alu) extends Module {
   dut.io <> io; ref.io <> io
 
   // check to ensure that outputs are the same
-  assert(ref.io.out === dut.io.out, "out: expected: %d, actual: %d", ref.io.out, dut.io.out)
+  assert(ref.io.Out === dut.io.Out, "out: expected: %d, actual: %d", ref.io.Out, dut.io.Out)
   assert(ref.io.sum === dut.io.sum, "sum: %d, actual: %d", ref.io.sum, dut.io.sum)
 }
