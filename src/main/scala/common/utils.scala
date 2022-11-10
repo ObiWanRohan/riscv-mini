@@ -75,3 +75,25 @@ object Str {
 
   private def validChar(x: Char) = x == (x & 0xff)
 }
+
+object IntSplitter {
+
+  /**
+    * Return a Seq containing the UInt split into the number of ways given
+    * The first element contains the lower side bytes
+    *
+    * @param init
+    * @param numWays
+    * @return
+    */
+  def apply(init: UInt, numWays: Int): Seq[UInt] = {
+
+    require(init.getWidth % numWays == 0, "The UInt should be divisible by the number of ways")
+
+    val subdataWidth = init.getWidth / numWays
+
+    (0 until numWays).foldLeft(Seq[UInt]()) { (x, index) =>
+      x.appended(init(((index + 1) * subdataWidth) - 1, index * subdataWidth))
+    }
+  }
+}
