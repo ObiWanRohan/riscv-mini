@@ -9,10 +9,11 @@ case class CoreConfig(
   trace:              Boolean = false,
   traceStack:         Boolean = false,
   xlen:               Int,
+  numWays:            Int,
   makeAlu:            Int => Alu = new AluSimple(_),
   makeBrCond:         Int => BrCond = new BrCondSimple(_),
   makeImmGen:         Int => ImmGen = new ImmGenWire(_),
-  makeForwardingUnit: Int => ForwardingUnit = new ForwardingUnit(_))
+  makeForwardingUnit: (Int, Int) => ForwardingUnit = new ForwardingUnit(_, _))
 
 class HostIO(xlen: Int) extends Bundle {
   val fromhost = Flipped(Valid(UInt(xlen.W)))

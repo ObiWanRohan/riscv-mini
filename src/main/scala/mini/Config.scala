@@ -9,14 +9,17 @@ case class Config(core: CoreConfig, cache: CacheConfig, nasti: NastiBundleParame
 object MiniConfig {
   def apply(): Config = {
     val xlen = 32
+    val numWays = 1
     Config(
       core = CoreConfig(
         trace = false,
+        traceStack = false,
+        numWays = 32,
         xlen = xlen,
         makeAlu = new AluSimple(_),
         makeBrCond = new BrCondSimple(_),
         makeImmGen = new ImmGenWire(_),
-        makeForwardingUnit = new ForwardingUnit(_)
+        makeForwardingUnit = new ForwardingUnit(_, _)
       ),
       cache = CacheConfig(
         nWays = 1,

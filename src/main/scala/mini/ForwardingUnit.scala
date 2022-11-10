@@ -26,7 +26,9 @@ object ForwardExeOperand extends ChiselEnum {
   val FWD_MW = Value(2.U)
 }
 
-class ForwardingUnitIO(width: Int) extends Bundle {
+class ForwardingUnitIO(xlen: Int, numWays: Int) extends Bundle {
+
+  print(s"Creating a $numWays forwarding unit with width $xlen.\n")
 
   import mini.DatapathStages.{
     DecodeExecutePipelineRegister,
@@ -39,14 +41,14 @@ class ForwardingUnitIO(width: Int) extends Bundle {
 
   /* Inputs from pipeline registers
    */
-  val fd_reg = Input(new FetchDecodePipelineRegister(width))
-  val de_reg = Input(new DecodeExecutePipelineRegister(width))
-  val em_reg = Input(new ExecuteMemoryPipelineRegister(width))
-  val mw_reg = Input(new MemoryWritebackPipelineRegister(width))
+  val fd_reg = Input(new FetchDecodePipelineRegister(xlen))
+  val de_reg = Input(new DecodeExecutePipelineRegister(xlen, numWays))
+  val em_reg = Input(new ExecuteMemoryPipelineRegister(xlen, numWays))
+  val mw_reg = Input(new MemoryWritebackPipelineRegister(xlen))
 
   // Source register addresses from decode stage
 
-  val writeback = Input(new WritebackRegIO(width))
+  val writeback = Input(new WritebackRegIO(xlen))
 
   /* Outputs to bypass muxes
    */
@@ -69,9 +71,9 @@ class ForwardingUnitIO(width: Int) extends Bundle {
   })
 }
 
-class ForwardingUnit(width: Int) extends Module {
+class ForwardingUnit(xlen: Int, numWays: Int) extends Module {
 
-  val io = IO(new ForwardingUnitIO(width))
+  val io = IO(new ForwardingUnitIO(xlen, numWays))
   import CPUControlSignalTypes._
 
   // Hazard for RS1(ALU OP1) when data is being written to memory in the we,

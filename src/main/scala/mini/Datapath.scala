@@ -31,7 +31,7 @@ class DatapathIO(xlen: Int) extends Bundle {
 class Datapath(val conf: CoreConfig) extends Module {
   val io = IO(new DatapathIO(conf.xlen))
 
-  val forwardingUnit = Module(conf.makeForwardingUnit(conf.xlen))
+  val forwardingUnit = Module(conf.makeForwardingUnit(conf.xlen, conf.numWays))
 
   import Control._
   import CPUControlSignalTypes._
