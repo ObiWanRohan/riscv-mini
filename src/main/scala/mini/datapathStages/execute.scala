@@ -12,25 +12,25 @@ import mini.Control.{N, Y}
 import CPUControlSignalTypes._
 import mini.{ForwardDecOperand, ForwardExeOperand}
 
-class ExecuteMemoryPipelineRegister(xlen: Int) extends Bundle {
+class ExecuteMemoryPipelineRegister(xlen: Int, numWays: Int) extends Bundle {
   val inst = chiselTypeOf(Instructions.NOP)
-  val pc = UInt(xlen.W)
-  val alu = UInt(xlen.W)
-  val rs2 = UInt(xlen.W)
-  val csr_in = UInt(xlen.W)
+  val pc = SplitUInt(xlen, numWays)
+  val alu = SplitUInt(xlen, numWays)
+  val rs2 = SplitUInt(xlen, numWays)
+  val csr_in = SplitUInt(xlen, numWays)
 
   val ctrl = new ControlSignals
 
 }
 
-class ExecuteStageIO(xlen: Int) extends Bundle {
+class ExecuteStageIO(conf: CoreConfig) extends Bundle {
   val full_stall = Input(Bool())
   val mem_stage_stall = Input(Bool())
 
-  val de_reg = Input(new DecodeExecutePipelineRegister(xlen))
-  val mw_reg = Input(new MemoryWritebackPipelineRegister(xlen))
+  val de_reg = Input(new DecodeExecutePipelineRegister(conf.xlen, conf.numWays))
+  val mw_reg = Input(new MemoryWritebackPipelineRegister(conf.xlen))
 
-  val csr = Input(new CSRIOOutput(xlen))
+  val csr = Input(new CSRIOOutput(conf.xlen))
 
   val forwardSignals = Input(new Bundle {
     val forward_exe_opA = ForwardExeOperand()
@@ -39,28 +39,28 @@ class ExecuteStageIO(xlen: Int) extends Bundle {
     val forward_exe_rs2 = ForwardExeOperand()
   })
 
-  val em_reg = Output(new ExecuteMemoryPipelineRegister(xlen))
+  val em_reg = Output(new ExecuteMemoryPipelineRegister(conf.xlen, conf.numWays))
 
   val brCond = Output(new Bundle {
     val taken = Bool()
   })
 
-  val ex_rs2 = Output(UInt(xlen.W))
+  val ex_rs2 = Output(SplitUInt(conf.xlen, conf.numWays))
   val alu = Output(new Bundle {
-    val sum = UInt(xlen.W)
+    val sum = SplitUInt(conf.xlen, conf.numWays)
   })
 
 }
 
 class ExecuteStage(val conf: CoreConfig) extends Module {
-  val io = IO(new ExecuteStageIO(conf.xlen))
+  val io = IO(new ExecuteStageIO(conf))
 
   // Instanciating modules needed in execute stage
   val alu = Module(conf.makeAlu(conf.xlen))
   val brCond = Module(conf.makeBrCond(conf.xlen))
 
   val em_reg = RegInit(
-    new ExecuteMemoryPipelineRegister(conf.xlen).Lit(
+    new ExecuteMemoryPipelineRegister(conf.xlen, conf.numWays).Lit(
       // TODO:
       // give default values .defaults()
       _.inst -> Instructions.NOP,
@@ -81,49 +81,49 @@ class ExecuteStage(val conf: CoreConfig) extends Module {
 
   ex_alu_opA := MuxLookup(
     io.forwardSignals.forward_exe_opA.asUInt,
-    io.de_reg.opA,
+    io.de_reg.opA.asUInt,
     IndexedSeq(
       // This should be the highest priority since it has the latest result
       ForwardExeOperand.FWD_EM.asUInt -> em_reg.alu,
       // Forward from MEM/WB stage register
       ForwardExeOperand.FWD_MW.asUInt -> io.mw_reg.wb_data,
-      ForwardExeOperand.FWD_NONE.asUInt -> io.de_reg.opA
+      ForwardExeOperand.FWD_NONE.asUInt -> io.de_reg.opA.asUInt
     )
   )
   ex_alu_opB := MuxLookup(
     io.forwardSignals.forward_exe_opB.asUInt,
-    io.de_reg.opB,
+    io.de_reg.opB.asUInt,
     IndexedSeq(
       // Forward from MEM/WB stage register
       ForwardExeOperand.FWD_EM.asUInt -> em_reg.alu,
       ForwardExeOperand.FWD_MW.asUInt -> io.mw_reg.wb_data,
-      ForwardExeOperand.FWD_NONE.asUInt -> io.de_reg.opB
+      ForwardExeOperand.FWD_NONE.asUInt -> io.de_reg.opB.asUInt
     )
   )
 
   ex_rs1 := MuxLookup(
     io.forwardSignals.forward_exe_rs1.asUInt,
-    io.de_reg.rs1,
+    io.de_reg.rs1.asUInt,
     IndexedSeq(
       // This is the highest priority since it has the latest result
       // Forward from EX/MEM stage register
       ForwardExeOperand.FWD_EM.asUInt -> em_reg.alu,
       // Forward from MEM/WB stage register
       ForwardExeOperand.FWD_MW.asUInt -> io.mw_reg.wb_data,
-      ForwardExeOperand.FWD_NONE.asUInt -> io.de_reg.rs1
+      ForwardExeOperand.FWD_NONE.asUInt -> io.de_reg.rs1.asUInt
     )
   )
 
   ex_rs2 := MuxLookup(
     io.forwardSignals.forward_exe_rs2.asUInt,
-    io.de_reg.rs2,
+    io.de_reg.rs2.asUInt,
     IndexedSeq(
       // This is the highest priority since it has the latest result
       // Forward from EX/MEM stage register
       ForwardExeOperand.FWD_EM.asUInt -> em_reg.alu,
       // Forward from MEM/WB stage register
       ForwardExeOperand.FWD_MW.asUInt -> io.mw_reg.wb_data,
-      ForwardExeOperand.FWD_NONE.asUInt -> io.de_reg.rs2
+      ForwardExeOperand.FWD_NONE.asUInt -> io.de_reg.rs2.asUInt
     )
   )
   alu.io.A := ex_alu_opA

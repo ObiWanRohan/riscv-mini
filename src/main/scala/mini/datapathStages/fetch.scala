@@ -18,8 +18,8 @@ class FetchDecodePipelineRegister(xlen: Int) extends Bundle {
   val ctrl = new ControlSignals
 }
 
-class FetchStageIO(xlen: Int) extends Bundle {
-  val icache = Flipped(new CacheIO(xlen, xlen))
+class FetchStageIO(conf: CoreConfig) extends Bundle {
+  val icache = Flipped(new CacheIO(conf.xlen, conf.xlen))
 
   // global control signals, logic in main datapath
   val full_stall = Input(Bool())
@@ -28,23 +28,23 @@ class FetchStageIO(xlen: Int) extends Bundle {
   val dec_kill = Input(Bool())
 
   // Inputs used by the fetch stage from other stages
-  val de_reg = Input(new DecodeExecutePipelineRegister(xlen))
-  val csr = Input(new CSRIOOutput(xlen))
+  val de_reg = Input(new DecodeExecutePipelineRegister(conf.xlen, conf.numWays))
+  val csr = Input(new CSRIOOutput(conf.xlen))
   val brCond = Input(new Bundle {
     val taken = Bool()
   })
   val alu = Input(new Bundle {
-    val sum = UInt(xlen.W)
+    val sum = UInt(conf.xlen.W)
   })
 
   val started = Output(Bool())
-  val fd_reg = Output(new FetchDecodePipelineRegister(xlen))
+  val fd_reg = Output(new FetchDecodePipelineRegister(conf.xlen))
 // TODO:  add other IO ports to the fetch stage -- forwarding unit, ctrl, brCond, etc
 
 }
 
 class FetchStage(val conf: CoreConfig) extends Module {
-  val io = IO(new FetchStageIO(conf.xlen))
+  val io = IO(new FetchStageIO(conf))
   val started = RegNext(reset.asBool)
 
   val fd_reg = RegInit(

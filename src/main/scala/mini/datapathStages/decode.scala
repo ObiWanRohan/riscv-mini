@@ -12,22 +12,22 @@ import mini.Control.{N, Y}
 import CPUControlSignalTypes._
 import mini.{ForwardDecOperand, ForwardExeOperand}
 
-class DecodeExecutePipelineRegister(xlen: Int) extends Bundle {
+class DecodeExecutePipelineRegister(xlen: Int, numWays: Int) extends Bundle {
   // outputs to de_reg
   val pc = UInt(xlen.W)
   val inst = chiselTypeOf(Instructions.NOP)
-  val immOut = UInt(xlen.W)
-  val opA = UInt(xlen.W)
-  val opB = UInt(xlen.W)
-  val rs1 = UInt(xlen.W)
-  val rs2 = UInt(xlen.W)
+  val immOut = SplitUInt(xlen, numWays)
+  val opA = SplitUInt(xlen, numWays)
+  val opB = SplitUInt(xlen, numWays)
+  val rs1 = SplitUInt(xlen, numWays)
+  val rs2 = SplitUInt(xlen, numWays)
 
   val ctrl = new ControlSignals
 }
 
-class DecodeStageIO(xlen: Int) extends Bundle {
+class DecodeStageIO(conf: CoreConfig) extends Bundle {
 
-  val full_stall = Input(UInt(xlen.W))
+  val full_stall = Input(Bool())
   val dec_stall = Input(Bool())
   val if_kill = Input(Bool())
   val dec_kill = Input(Bool())
@@ -39,36 +39,36 @@ class DecodeStageIO(xlen: Int) extends Bundle {
   val brCond = Input(new Bundle {
     val taken = Bool()
   })
-  val csr = Input(new CSRIOOutput(xlen))
+  val csr = Input(new CSRIOOutput(conf.xlen))
 
-  val writeback = Input(new WritebackRegIO(xlen))
+  val writeback = Input(new WritebackRegIO(conf.xlen))
 
-  val fd_reg = Input(new FetchDecodePipelineRegister(xlen))
-  val em_reg = Input(new ExecuteMemoryPipelineRegister(xlen))
-  val mw_reg = Input(new MemoryWritebackPipelineRegister(xlen))
+  val fd_reg = Input(new FetchDecodePipelineRegister(conf.xlen))
+  val em_reg = Input(new ExecuteMemoryPipelineRegister(conf.xlen, conf.numWays))
+  val mw_reg = Input(new MemoryWritebackPipelineRegister(conf.xlen))
   val forwardSignals = Input(new Bundle {
     val forward_dec_opA = ForwardDecOperand()
     val forward_dec_opB = ForwardDecOperand()
   })
 
-  val de_reg = Output(new DecodeExecutePipelineRegister(xlen))
+  val de_reg = Output(new DecodeExecutePipelineRegister(conf.xlen, conf.numWays))
 
 }
 
 class DecodeStage(val conf: CoreConfig) extends Module {
-  val io = IO(new DecodeStageIO(conf.xlen))
+  val io = IO(new DecodeStageIO(conf))
   val regFile = Module(new RegFile(conf.xlen))
   val immGen = Module(conf.makeImmGen(conf.xlen))
 
   val de_reg = RegInit(
-    new DecodeExecutePipelineRegister(conf.xlen).Lit(
+    new DecodeExecutePipelineRegister(conf.xlen, conf.numWays).Lit(
       // TODO:
       // give default values .defaults()
       _.inst -> Instructions.NOP,
       _.pc -> 0.U,
-      _.opA -> 0.U,
-      _.opB -> 0.U,
-      _.rs2 -> 0.U,
+      // _.opA -> SplitUInt(0.U(conf.xlen.W), conf.numWays),
+      // _.opB -> SplitUInt(0.U(conf.xlen.W), conf.numWays),
+      // _.rs2 -> SplitUInt(0.U(conf.xlen.W), conf.numWays),
       _.ctrl -> ControlSignals.defaultSignals()
     )
   )
@@ -96,8 +96,8 @@ class DecodeStage(val conf: CoreConfig) extends Module {
   immGen.io.sel := io.ctrl.imm_sel
 
   // Register read data values including bypass
-  val rs1 = Wire(UInt(conf.xlen.W))
-  val rs2 = Wire(UInt(conf.xlen.W))
+  val rs1 = Wire(SplitUInt(conf.xlen, conf.numWays))
+  val rs2 = Wire(SplitUInt(conf.xlen, conf.numWays))
 
   rs1 := MuxCase(
     regFile.io.rdata1,
@@ -143,17 +143,17 @@ class DecodeStage(val conf: CoreConfig) extends Module {
 
       // Mux to bypass register from writeback stage
       de_reg.opA := MuxCase(
-        rs1,
+        rs1.asUInt,
         IndexedSeq(
-          (io.ctrl.A_sel === ASel.A_RS1) -> rs1,
+          (io.ctrl.A_sel === ASel.A_RS1) -> rs1.asUInt,
           (io.ctrl.A_sel === ASel.A_PC) -> io.fd_reg.pc
         )
       )
 
       de_reg.opB := MuxCase(
-        rs2,
+        rs2.asUInt,
         IndexedSeq(
-          (io.ctrl.B_sel === BSel.B_RS2) -> rs2,
+          (io.ctrl.B_sel === BSel.B_RS2) -> rs2.asUInt,
           (io.ctrl.B_sel === BSel.B_IMM) -> immGen.io.out
         )
       )
@@ -183,11 +183,11 @@ class DecodeStage(val conf: CoreConfig) extends Module {
         _.illegal -> N
       )
 
-      de_reg.rs1 := 0.U
-      de_reg.rs2 := 0.U
-      de_reg.immOut := 0.U
-      de_reg.opA := 0.U
-      de_reg.opB := 0.U
+      de_reg.rs1 := 0.U(conf.xlen.W)
+      de_reg.rs2 := 0.U(conf.xlen.W)
+      de_reg.immOut := 0.U(conf.xlen.W)
+      de_reg.opA := 0.U(conf.xlen.W)
+      de_reg.opB := 0.U(conf.xlen.W)
 
     }
   }

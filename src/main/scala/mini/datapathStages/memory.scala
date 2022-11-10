@@ -22,16 +22,16 @@ class MemoryWritebackPipelineRegister(xlen: Int) extends Bundle {
   val ctrl = new ControlSignals
 }
 
-class MemoryStageIO(xlen: Int) extends Bundle {
-  val dcache = Flipped(new CacheIO(xlen, xlen))
+class MemoryStageIO(conf: CoreConfig) extends Bundle {
+  val dcache = Flipped(new CacheIO(conf.xlen, conf.xlen))
 
   val full_stall = Input(Bool())
   val mem_stage_stall = Input(Bool())
-  val de_reg = Input(new DecodeExecutePipelineRegister(xlen))
-  val em_reg = Input(new ExecuteMemoryPipelineRegister(xlen))
+  val de_reg = Input(new DecodeExecutePipelineRegister(conf.xlen, conf.numWays))
+  val em_reg = Input(new ExecuteMemoryPipelineRegister(conf.xlen, conf.numWays))
 
   val alu = Input(new Bundle {
-    val sum = UInt(xlen.W)
+    val sum = UInt(conf.xlen.W)
   })
   val brCond = Input(new Bundle {
     val taken = Bool()
@@ -39,13 +39,13 @@ class MemoryStageIO(xlen: Int) extends Bundle {
 
   val illegal = Output(Bool())
 
-  val host = (new HostIO(xlen))
-  val csr = Output(new CSRIOOutput(xlen))
-  val mw_reg = Output(new MemoryWritebackPipelineRegister(xlen))
+  val host = (new HostIO(conf.xlen))
+  val csr = Output(new CSRIOOutput(conf.xlen))
+  val mw_reg = Output(new MemoryWritebackPipelineRegister(conf.xlen))
 }
 
 class MemoryStage(val conf: CoreConfig) extends Module {
-  val io = IO(new MemoryStageIO(conf.xlen))
+  val io = IO(new MemoryStageIO(conf))
   val csr = Module(new CSR(conf.xlen)) //mem stage
 
   val mw_reg = RegInit(
