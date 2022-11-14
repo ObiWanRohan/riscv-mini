@@ -88,7 +88,10 @@ object IntSplitter {
     */
   def apply(init: UInt, numWays: Int): Seq[UInt] = {
 
-    require(init.getWidth % numWays == 0, "The UInt should be divisible by the number of ways")
+    require(
+      init.getWidth % numWays == 0,
+      s"The UInt should be divisible by the number of ways. ${init.getWidth} is not divisible by $numWays"
+    )
 
     val subdataWidth = init.getWidth / numWays
 
