@@ -5,6 +5,16 @@ import chisel3.util._
 import chisel3.experimental.BundleLiterals._
 import chisel3.internal.sourceinfo.SourceInfo
 
+/**
+  * A type to represent subscalar data
+  *
+  * The data contained is a vector with the index 0 representing the lowest subdata
+  * and (numWays - 1) having the most significant bits
+  *
+  * @param xlen Total width of the data
+  * @param numWays Number of ways in which the data is divided
+  * @param init An optional initial value
+  */
 class SplitUInt(val xlen: Int, val numWays: Int, init: Option[UInt] = None) extends Bundle with Num[SplitUInt] {
 
   def this(xlen: Int, numWays: Int, init: UInt) = {
@@ -72,13 +82,18 @@ class SplitUInt(val xlen: Int, val numWays: Int, init: Option[UInt] = None) exte
 
   def :=(that: UInt): Unit = {
     require(
-      this.xlen == that.getWidth,
+      this.xlen >= that.getWidth,
       s"Cannot assign a SplitUInt of width ${this.xlen} from a UInt of different length ${that.getWidth}."
     )
 
-    for ((a, b) <- this.data.zip(IntSplitter(that, this.numWays)))
-      a := b
+    var modifiedThat = that
 
+    if (this.xlen > that.getWidth) {
+      modifiedThat = Cat(0.U((this.xlen - that.getWidth).W), that)
+    }
+
+    for ((a, b) <- this.data.zip(IntSplitter(modifiedThat, this.numWays)))
+      a := b
   }
 
   def :=(that: SplitUInt): Unit = {
@@ -138,13 +153,41 @@ class SplitUInt(val xlen: Int, val numWays: Int, init: Option[UInt] = None) exte
   // TODO: Add a shifter here
   def <<(shamt: UInt): SplitUInt = {
 
+    val maxShiftAmount = scala.math.pow(2, shamt.getWidth).toInt - 1
+
     SplitUInt(
-      Cat(
-        (this.toUInt << shamt)(this.xlen - shamt.getWidth - 1, shamt.getWidth),
-        0.U(shamt.getWidth.W)
-      ),
+      (this.toUInt << shamt)(xlen - 1, 0),
       this.numWays
     )
+  }
+
+  def flatInterface: UInt = {
+
+    val output = Wire(SplitUInt(this.xlen, this.numWays))
+
+    for (subDataIndex <- 0 until this.numWays) {
+
+      val subInput = this(subDataIndex)
+
+      // The most significant bits are the ones which are received last
+      // So i=0 should have (numWays-1) delay, i=numWays-1 should have 0 delay
+      val numRegs = (numWays - 1) - subDataIndex
+      // println(s"Creating $numRegs registers for index $subDataIndex")
+
+      val subOutput = (0 until numRegs).foldLeft(subInput) {
+        case (prev, i) => {
+          val intermediateReg = Reg(UInt(this.subdataWidth.W))
+          intermediateReg := prev
+
+          intermediateReg
+        }
+      }
+
+      output(subDataIndex) := subOutput
+
+    }
+
+    output.asUInt
   }
 
   def +(that: UInt): SplitUInt = {
@@ -241,6 +284,8 @@ object SplitUInt {
 
   def apply(init: UInt, numWays: Int) = {
 
+    val w = Wire(new SplitUInt(init.getWidth, numWays))
+
     val u = new SplitUInt(init.getWidth, numWays, Some(init))
 
     (0 until numWays).foldLeft(()) {
@@ -248,12 +293,11 @@ object SplitUInt {
         u(index) := init(((index + 1) * u.subdataWidth) - 1, index * u.subdataWidth)
     }
 
-    u
+    w := u
+    w
   }
 
   def literal(init: UInt, numWays: Int) = {
     (new SplitUInt(init.getWidth, numWays)).Lit(_.data -> VecInit(IntSplitter(init, numWays)))
   }
 }
-
-class SkewPipeline(val stages: Int) {}
