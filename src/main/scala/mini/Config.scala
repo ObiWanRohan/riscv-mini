@@ -9,12 +9,12 @@ case class Config(core: CoreConfig, cache: CacheConfig, nasti: NastiBundleParame
 object MiniConfig {
   def apply(): Config = {
     val xlen = 32
-    val numWays = 1
+    val numWays = 2
     Config(
       core = CoreConfig(
         trace = false,
         traceStack = false,
-        numWays = 32,
+        numWays = numWays,
         xlen = xlen,
         makeAlu = new AluSimple(_),
         makeBrCond = new BrCondSimple(_),
