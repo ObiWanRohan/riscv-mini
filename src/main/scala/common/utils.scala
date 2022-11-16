@@ -86,7 +86,7 @@ object IntSplitter {
     * @param numWays
     * @return
     */
-  def apply(init: UInt, numWays: Int): Seq[UInt] = {
+  def apply(init: UInt, numWays: Int): IndexedSeq[UInt] = {
 
     require(
       init.getWidth % numWays == 0,
@@ -95,7 +95,7 @@ object IntSplitter {
 
     val subdataWidth = init.getWidth / numWays
 
-    (0 until numWays).foldLeft(Seq[UInt]()) { (x, index) =>
+    (0 until numWays).foldLeft(IndexedSeq[UInt]()) { (x, index) =>
       x.appended(init(((index + 1) * subdataWidth) - 1, index * subdataWidth))
     }
   }
