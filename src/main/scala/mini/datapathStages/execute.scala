@@ -23,6 +23,15 @@ class ExecuteMemoryPipelineRegister(xlen: Int) extends Bundle {
 
 }
 
+class ExecuteStageRegister(xlen: Int) extends Bundle {
+  val inst = chiselTypeOf(Instructions.NOP)
+  val pc = UInt(xlen.W)
+  val rs2 = UInt(xlen.W)
+  // val csr_in = UInt(xlen.W)
+
+  val ctrl = new ControlSignals
+}
+
 class ExecuteStageIO(xlen: Int) extends Bundle {
   val full_stall = Input(Bool())
   val mem_stage_stall = Input(Bool())
@@ -68,6 +77,16 @@ class ExecuteStage(val conf: CoreConfig) extends Module {
       _.alu -> 0.U,
       _.rs2 -> 0.U,
       // _.dcache_out -> 0.S,
+      _.ctrl -> ControlSignals.defaultSignals()
+    )
+  )
+
+  val exe_reg = RegInit(
+    new ExecuteStageRegister(conf.xlen).Lit(
+      _.inst -> Instructions.NOP,
+      _.pc -> 0.U,
+      _.rs2 -> 0.U,
+      // _.csr_in -> 0.U,
       _.ctrl -> ControlSignals.defaultSignals()
     )
   )
@@ -166,10 +185,11 @@ class ExecuteStage(val conf: CoreConfig) extends Module {
     em_reg.csr_in := 0.U
 
   }.elsewhen(!io.full_stall && !execute_kill) {
-    em_reg.pc := io.de_reg.pc
-    em_reg.inst := io.de_reg.inst
-    em_reg.ctrl := io.de_reg.ctrl
-    em_reg.rs2 := io.de_reg.rs2
+    // em_reg output is connected to execute stage register
+    em_reg.pc := exe_reg.pc
+    em_reg.inst := exe_reg.inst
+    em_reg.ctrl := exe_reg.ctrl
+    em_reg.rs2 := exe_reg.rs2
     em_reg.alu := alu.io.Out
     // ew_reg.csr_in := Mux(io.de_reg.ctrl.imm_sel === ImmSel.IMM_Z, io.de_reg.immOut, io.de_reg.opA)
     em_reg.csr_in := alu.io.Out
@@ -177,12 +197,19 @@ class ExecuteStage(val conf: CoreConfig) extends Module {
   }
 
   // forwardingUnit.io.em_reg := em_reg
-  // ctrl^c ctrl^v
 
-  // IO connections for execute stafe
+  // pipeline de_reg data and ctrl to exe reg
+  exe_reg := io.de_reg
+  // em_reg := exe_reg //-- gives src and sync error -- exe_reg does not have csr_in
+
+  // IO connections for execute stage
   io.em_reg := em_reg
   io.brCond := brCond.io
   io.ex_rs2 := ex_rs2
   io.alu := alu.io
 
+  // Stuff we need to pipeline
+  // all the stuff from de_reg going to em_reg
+  // pc, inst, .ctrlsignals
+  // set ctrl for all the stuff expected after 1 cycle but now available after 2 cycle
 }
