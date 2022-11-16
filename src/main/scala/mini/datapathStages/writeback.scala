@@ -11,24 +11,24 @@ import mini.{CoreConfig, RegFile}
 import CPUControlSignalTypes._
 import mini.{ForwardDecOperand, ForwardExeOperand}
 
-class WritebackRegIO(xlen: Int) extends Bundle {
+class WritebackRegIO(xlen: Int, numWays: Int) extends Bundle {
   // Writeback enable control
   val en = Bool()
   // Destination Register Address
   val rd_addr = UInt(REG_ADDR_WIDTH)
-  val data = UInt(xlen.W)
+  val data = SplitUInt(xlen, numWays)
 
 }
 
-class WritebackStageIO(xlen: Int) extends Bundle {
-  val mw_reg = Input(new MemoryWritebackPipelineRegister(xlen))
+class WritebackStageIO(xlen: Int, numWays: Int) extends Bundle {
+  val mw_reg = Input(new MemoryWritebackPipelineRegister(xlen, numWays))
 
-  val writeback = Output(new WritebackRegIO(xlen))
+  val writeback = Output(new WritebackRegIO(xlen, numWays))
 
 }
 
 class WritebackStage(val conf: CoreConfig) extends Module {
-  val io = IO(new WritebackStageIO(conf.xlen))
+  val io = IO(new WritebackStageIO(conf.xlen, conf.numWays))
 
   val wb_rd_addr = io.mw_reg.inst(RD_MSB, RD_LSB)
 

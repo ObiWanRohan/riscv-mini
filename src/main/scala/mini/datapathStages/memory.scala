@@ -12,11 +12,11 @@ import mini.Control.{N, Y}
 import CPUControlSignalTypes._
 import mini.ForwardDecOperand._
 
-class MemoryWritebackPipelineRegister(xlen: Int) extends Bundle {
+class MemoryWritebackPipelineRegister(xlen: Int, numWays: Int) extends Bundle {
   val inst = chiselTypeOf(Instructions.NOP)
-  val pc = UInt(xlen.W)
-  val wb_data = UInt(xlen.W) //needed for writeback
-  val rs2 = UInt(xlen.W) // needed for writeback
+  val pc = SplitUInt(xlen, numWays)
+  val wb_data = SplitUInt(xlen, numWays) //needed for writeback
+  val rs2 = SplitUInt(xlen, numWays) // needed for writeback
   val dcache_out = SInt(xlen.W) //
 
   val ctrl = new ControlSignals
@@ -31,7 +31,7 @@ class MemoryStageIO(conf: CoreConfig) extends Bundle {
   val em_reg = Input(new ExecuteMemoryPipelineRegister(conf.xlen, conf.numWays))
 
   val alu = Input(new Bundle {
-    val sum = UInt(conf.xlen.W)
+    val sum = SplitUInt(conf.xlen, conf.numWays)
   })
   val brCond = Input(new Bundle {
     val taken = Bool()
@@ -41,7 +41,7 @@ class MemoryStageIO(conf: CoreConfig) extends Bundle {
 
   val host = (new HostIO(conf.xlen))
   val csr = Output(new CSRIOOutput(conf.xlen))
-  val mw_reg = Output(new MemoryWritebackPipelineRegister(conf.xlen))
+  val mw_reg = Output(new MemoryWritebackPipelineRegister(conf.xlen, conf.numWays))
 }
 
 class MemoryStage(val conf: CoreConfig) extends Module {
@@ -49,11 +49,11 @@ class MemoryStage(val conf: CoreConfig) extends Module {
   val csr = Module(new CSR(conf.xlen)) //mem stage
 
   val mw_reg = RegInit(
-    (new MemoryWritebackPipelineRegister(conf.xlen)).Lit(
+    (new MemoryWritebackPipelineRegister(conf.xlen, conf.numWays)).Lit(
       _.inst -> Instructions.NOP,
-      _.pc -> 0.U,
-      _.wb_data -> 0.U,
-      _.rs2 -> 0.U,
+      // _.pc -> 0.U,
+      // _.wb_data -> 0.U,
+      // _.rs2 -> 0.U,
       _.dcache_out -> 0.S,
       _.ctrl -> ControlSignals.defaultSignals()
     )
@@ -64,8 +64,14 @@ class MemoryStage(val conf: CoreConfig) extends Module {
 
   val regWrite = Wire(UInt(conf.xlen.W))
   val load = Wire(SInt(conf.xlen.W))
+
 //   Load
-  val loffset = (io.em_reg.alu(1) << 4.U).asUInt | (io.em_reg.alu(0) << 3.U).asUInt
+  val loffset = if (conf.xlen / conf.numWays == 1) {
+    (io.em_reg.alu(1) << 4.U).asUInt | (io.em_reg.alu(0) << 3.U).asUInt
+  } else {
+    (io.em_reg.alu(0)(1) << 4.U).asUInt | (io.em_reg.alu(0)(0) << 3.U).asUInt
+  }
+
   val lshift = io.dcache.resp.bits.data >> loffset
   load := Mux(
     io.em_reg.ctrl.ld_type.asUInt.orR && (io.em_reg.alu === Const.FROMHOST_ADDR.U) && io.host.fromhost.valid,
@@ -83,11 +89,11 @@ class MemoryStage(val conf: CoreConfig) extends Module {
   )
   // CSR access -----------------------------VERIFY CSR EXECUTE / MEMORY PIPELINE ACCESS BELOW
   csr.io.stall := io.full_stall
-  csr.io.in := io.em_reg.csr_in
+  csr.io.in := io.em_reg.csr_in.flatInterface
   csr.io.cmd := io.em_reg.ctrl.csr_cmd
   csr.io.inst := io.em_reg.inst
-  csr.io.pc := io.em_reg.pc
-  csr.io.addr := io.em_reg.alu
+  csr.io.pc := io.em_reg.pc.flatInterface
+  csr.io.addr := io.em_reg.alu.flatInterface
   csr.io.illegal := illegal
   csr.io.pc_check := pc_check
   csr.io.ld_type := io.em_reg.ctrl.ld_type
@@ -103,21 +109,39 @@ class MemoryStage(val conf: CoreConfig) extends Module {
 
   // D$ access
   // Setting the lower 2 bits to 0
-  val daddr = io.em_reg.alu >> 2.U << 2.U
-  val woffset = (io.em_reg.alu(1) << 4.U).asUInt | (io.em_reg.alu(0) << 3.U).asUInt
+  val daddr = Cat(io.em_reg.alu.asUInt(conf.xlen - 1, 2), 0.U(2.W))
+  val woffset = if (conf.xlen / conf.numWays == 1) {
+    (io.em_reg.alu(1) << 4.U).asUInt | (io.em_reg.alu(0) << 3.U).asUInt
+  } else {
+    (io.em_reg.alu(0)(1) << 4.U).asUInt | (io.em_reg.alu(0)(0) << 3.U).asUInt
+  }
 
   val tohost_reg = Reg(UInt(conf.xlen.W))
   val tohost_mem_req = memReqValid && io.em_reg.ctrl.st_type.asUInt.orR && (daddr === Const.TOHOST_ADDR.U)
 
-  val storeMaskControlBits = MuxLookup(
-    io.em_reg.ctrl.st_type.asUInt,
-    "b0000".U,
-    Seq(
-      StType.ST_SW.asUInt -> "b1111".U,
-      StType.ST_SH.asUInt -> ("b11".U << io.em_reg.alu(1, 0)),
-      StType.ST_SB.asUInt -> ("b1".U << io.em_reg.alu(1, 0))
+  // TODO : Add shifter here
+  val storeMaskControlBits = if (conf.xlen / conf.numWays == 1) {
+    MuxLookup(
+      io.em_reg.ctrl.st_type.asUInt,
+      "b0000".U,
+      Seq(
+        StType.ST_SW.asUInt -> "b1111".U,
+        StType.ST_SH.asUInt -> ("b11".U << (io.em_reg.alu(1) << 1.U(1.W) | io.em_reg.alu(0))),
+        StType.ST_SB.asUInt -> ("b1".U << (io.em_reg.alu(1) << 1.U(1.W) | io.em_reg.alu(0)))
+      )
     )
-  )
+  } else {
+    MuxLookup(
+      io.em_reg.ctrl.st_type.asUInt,
+      "b0000".U,
+      Seq(
+        StType.ST_SW.asUInt -> "b1111".U,
+        StType.ST_SH.asUInt -> ("b11".U << io.em_reg.alu(0)(1, 0)),
+        StType.ST_SB.asUInt -> ("b1".U << io.em_reg.alu(0)(1, 0))
+      )
+    )
+
+  }
 
   // Creating the complete mask from the store mask bits
   // Number of bytes in the data (as each mask bit controls a byte)
@@ -129,7 +153,7 @@ class MemoryStage(val conf: CoreConfig) extends Module {
 
   // Writing to host IO
   when(tohost_mem_req) {
-    tohost_reg := io.em_reg.rs2 & storeMask
+    tohost_reg := (io.em_reg.rs2 & storeMask).asUInt
   }
 
   val mem_load_request_sent = RegEnable(
@@ -147,7 +171,7 @@ class MemoryStage(val conf: CoreConfig) extends Module {
     // !RegNext(io.mem_stage_stall)
   )
   io.dcache.req.bits.addr := daddr
-  io.dcache.req.bits.data := io.em_reg.rs2 << woffset
+  io.dcache.req.bits.data := (io.em_reg.rs2 << woffset).flatInterface
   io.dcache.req.bits.mask := storeMaskControlBits
   // Abort store when there's an exception
   io.dcache.abort := csr.io.exception
@@ -157,10 +181,10 @@ class MemoryStage(val conf: CoreConfig) extends Module {
   // Regfile Write data
   regWrite := MuxLookup(
     io.em_reg.ctrl.wb_sel.asUInt,
-    io.em_reg.alu.zext,
+    io.em_reg.alu.asUInt.zext,
     Seq(
       WbSel.WB_MEM.asUInt -> load,
-      WbSel.WB_PC4.asUInt -> (io.em_reg.pc + 4.U).zext,
+      WbSel.WB_PC4.asUInt -> (io.em_reg.pc + 4.U).asUInt.zext,
       WbSel.WB_CSR.asUInt -> csr.io.out.zext
     )
   ).asUInt

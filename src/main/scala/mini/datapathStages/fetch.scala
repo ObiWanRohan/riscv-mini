@@ -34,7 +34,7 @@ class FetchStageIO(conf: CoreConfig) extends Bundle {
     val taken = Bool()
   })
   val alu = Input(new Bundle {
-    val sum = UInt(conf.xlen.W)
+    val sum = SplitUInt(conf.xlen, conf.numWays)
   })
 
   val started = Output(Bool())
@@ -62,7 +62,9 @@ class FetchStage(val conf: CoreConfig) extends Module {
     IndexedSeq(
       io.csr.exception -> io.csr.evec,
       (io.de_reg.ctrl.pc_sel === PCSel.PC_EPC) -> io.csr.epc,
-      ((io.de_reg.ctrl.pc_sel === PCSel.PC_ALU) || (io.brCond.taken)) -> (io.alu.sum >> 1.U << 1.U),
+      ((io.de_reg.ctrl.pc_sel === PCSel.PC_ALU) || (io.brCond.taken)) -> (
+        Cat(io.alu.sum.asUInt(conf.xlen - 1, 1), 0.U(1.W))
+      ),
       (io.de_reg.ctrl.pc_sel === PCSel.PC_0) -> pc,
       (io.full_stall || io.dec_stall) -> pc
     )

@@ -10,7 +10,7 @@ import mini.{AluSel, BrCond, CSR, CSRIOOutput, Const, ControlSignals, CoreConfig
 import mini.Control.{N, Y}
 
 import CPUControlSignalTypes._
-import mini.{ForwardDecOperand, ForwardExeOperand}
+import mini.{ForwardDecOperand, ForwardExeOperand, SubscalarRegFile}
 
 class DecodeExecutePipelineRegister(xlen: Int, numWays: Int) extends Bundle {
   // outputs to de_reg
@@ -41,11 +41,11 @@ class DecodeStageIO(conf: CoreConfig) extends Bundle {
   })
   val csr = Input(new CSRIOOutput(conf.xlen))
 
-  val writeback = Input(new WritebackRegIO(conf.xlen))
+  val writeback = Input(new WritebackRegIO(conf.xlen, conf.numWays))
 
   val fd_reg = Input(new FetchDecodePipelineRegister(conf.xlen))
   val em_reg = Input(new ExecuteMemoryPipelineRegister(conf.xlen, conf.numWays))
-  val mw_reg = Input(new MemoryWritebackPipelineRegister(conf.xlen))
+  val mw_reg = Input(new MemoryWritebackPipelineRegister(conf.xlen, conf.numWays))
   val forwardSignals = Input(new Bundle {
     val forward_dec_opA = ForwardDecOperand()
     val forward_dec_opB = ForwardDecOperand()
@@ -57,7 +57,7 @@ class DecodeStageIO(conf: CoreConfig) extends Bundle {
 
 class DecodeStage(val conf: CoreConfig) extends Module {
   val io = IO(new DecodeStageIO(conf))
-  val regFile = Module(new RegFile(conf.xlen))
+  val regFile = Module(new SubscalarRegFile(conf.xlen, conf.numWays))
   val immGen = Module(conf.makeImmGen(conf.xlen))
 
   val de_reg = RegInit(

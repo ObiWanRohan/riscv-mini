@@ -28,7 +28,7 @@ class ExecuteStageIO(conf: CoreConfig) extends Bundle {
   val mem_stage_stall = Input(Bool())
 
   val de_reg = Input(new DecodeExecutePipelineRegister(conf.xlen, conf.numWays))
-  val mw_reg = Input(new MemoryWritebackPipelineRegister(conf.xlen))
+  val mw_reg = Input(new MemoryWritebackPipelineRegister(conf.xlen, conf.numWays))
 
   val csr = Input(new CSRIOOutput(conf.xlen))
 
@@ -64,9 +64,9 @@ class ExecuteStage(val conf: CoreConfig) extends Module {
       // TODO:
       // give default values .defaults()
       _.inst -> Instructions.NOP,
-      _.pc -> 0.U,
-      _.alu -> 0.U,
-      _.rs2 -> 0.U,
+      // _.pc -> 0.U,
+      // _.alu -> 0.U,
+      // _.rs2 -> 0.U,
       // _.dcache_out -> 0.S,
       _.ctrl -> ControlSignals.defaultSignals()
     )
@@ -81,51 +81,51 @@ class ExecuteStage(val conf: CoreConfig) extends Module {
 
   ex_alu_opA := MuxLookup(
     io.forwardSignals.forward_exe_opA.asUInt,
-    io.de_reg.opA.asUInt,
+    io.de_reg.opA,
     IndexedSeq(
       // This should be the highest priority since it has the latest result
       ForwardExeOperand.FWD_EM.asUInt -> em_reg.alu,
       // Forward from MEM/WB stage register
       ForwardExeOperand.FWD_MW.asUInt -> io.mw_reg.wb_data,
-      ForwardExeOperand.FWD_NONE.asUInt -> io.de_reg.opA.asUInt
+      ForwardExeOperand.FWD_NONE.asUInt -> io.de_reg.opA
     )
-  )
+  ).asUInt
   ex_alu_opB := MuxLookup(
     io.forwardSignals.forward_exe_opB.asUInt,
-    io.de_reg.opB.asUInt,
+    io.de_reg.opB,
     IndexedSeq(
       // Forward from MEM/WB stage register
       ForwardExeOperand.FWD_EM.asUInt -> em_reg.alu,
       ForwardExeOperand.FWD_MW.asUInt -> io.mw_reg.wb_data,
-      ForwardExeOperand.FWD_NONE.asUInt -> io.de_reg.opB.asUInt
+      ForwardExeOperand.FWD_NONE.asUInt -> io.de_reg.opB
     )
-  )
+  ).asUInt
 
   ex_rs1 := MuxLookup(
     io.forwardSignals.forward_exe_rs1.asUInt,
-    io.de_reg.rs1.asUInt,
+    io.de_reg.rs1,
     IndexedSeq(
       // This is the highest priority since it has the latest result
       // Forward from EX/MEM stage register
       ForwardExeOperand.FWD_EM.asUInt -> em_reg.alu,
       // Forward from MEM/WB stage register
       ForwardExeOperand.FWD_MW.asUInt -> io.mw_reg.wb_data,
-      ForwardExeOperand.FWD_NONE.asUInt -> io.de_reg.rs1.asUInt
+      ForwardExeOperand.FWD_NONE.asUInt -> io.de_reg.rs1
     )
-  )
+  ).asUInt
 
   ex_rs2 := MuxLookup(
     io.forwardSignals.forward_exe_rs2.asUInt,
-    io.de_reg.rs2.asUInt,
+    io.de_reg.rs2,
     IndexedSeq(
       // This is the highest priority since it has the latest result
       // Forward from EX/MEM stage register
       ForwardExeOperand.FWD_EM.asUInt -> em_reg.alu,
       // Forward from MEM/WB stage register
       ForwardExeOperand.FWD_MW.asUInt -> io.mw_reg.wb_data,
-      ForwardExeOperand.FWD_NONE.asUInt -> io.de_reg.rs2.asUInt
+      ForwardExeOperand.FWD_NONE.asUInt -> io.de_reg.rs2
     )
-  )
+  ).asUInt
   alu.io.A := ex_alu_opA
   alu.io.B := ex_alu_opB
 
@@ -182,6 +182,6 @@ class ExecuteStage(val conf: CoreConfig) extends Module {
   io.em_reg := em_reg
   io.brCond := brCond.io
   io.ex_rs2 := ex_rs2
-  io.alu := alu.io
+  io.alu.sum := alu.io.sum
 
 }
