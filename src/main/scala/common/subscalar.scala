@@ -300,4 +300,46 @@ object SplitUInt {
   def literal(init: UInt, numWays: Int) = {
     (new SplitUInt(init.getWidth, numWays)).Lit(_.data -> VecInit(IntSplitter(init, numWays)))
   }
+
+  /**
+    * Create a pipeline skew generator and return a skewed split integer
+    *
+    * @param in
+    * @return
+    */
+  def skewPipeline(in: UInt, numWays: Int): SplitUInt = {
+    require(in.getWidth % numWays == 0, s"The UInt width ${in.getWidth} should be divisible by numWays ($numWays)")
+
+    val inWidth = in.getWidth
+    val subDataWidth = inWidth / numWays
+
+    val splitInput = IntSplitter(in, numWays)
+
+    // Pipeline skew generator
+    val output = Wire(SplitUInt(inWidth, numWays))
+
+    for (subDataIndex <- 0 until numWays) {
+
+      val subInput = splitInput(subDataIndex)
+
+      // The most significant bits are the ones which are sent last
+      // So i=0 should have 0 delay, i=numWays-1 should have numWays-1 delay
+      val numRegs = subDataIndex
+
+      val subOutput = (0 until numRegs).foldLeft(subInput) {
+        case (prev, i) => {
+          val intermediateReg = Reg(UInt(subDataWidth.W))
+          intermediateReg := prev
+
+          intermediateReg
+        }
+      }
+
+      output(subDataIndex) := subOutput
+
+    }
+
+    output
+  }
+
 }
