@@ -1,0 +1,3 @@
+[submodule "FPU"]
+	path = FPU
+	url = git@github.com:ParthPant/FPU.git
