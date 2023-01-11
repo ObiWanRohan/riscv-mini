@@ -89,8 +89,8 @@ class SubscalarAdder(val width: Int, val numWays: Int) extends Adder {
 
       sum(index) := RCA.io.sum
 
-      RCA.io.cout
-
+      // RegNext for subscalar pipelining
+      RegNext(RCA.io.cout)
   }
 
   // Used for testing the SplitUInt type
