@@ -65,8 +65,9 @@ class CarryRippleAdder(val width: Int) extends Adder {
 class SubscalarAdder(val width: Int, val numWays: Int) extends Adder {
   /*
     This adder computes using numWays banks of adders to compute the sum.
-    Currently all the input data is assumed to be received at the same time. (This will change later)
    */
+
+  override val desiredName = f"SubscalarAdder_${numWays}way"
 
   val io = IO(new AdderIO(width))
 
@@ -103,6 +104,36 @@ class SubscalarAdder(val width: Int, val numWays: Int) extends Adder {
   printf(cf"Sum asUInt : ${sum.toUInt} width : $width ways : $numWays\n")
   // io.sum := (a + b)
   io.sum := sum.toUInt
-  // io.cout := cout
+  io.cout := cout
+
+}
+
+class MultipleAdders(width: Int) extends Module {
+  val io = IO(new AdderIO(width))
+
+  var sums = Seq.empty[UInt]
+  var couts = Seq.empty[UInt]
+
+  for (i <- 0 to 5) {
+
+    val numWays = Math.pow(2, i).toInt
+    println(f"Generating ${numWays}-way adder")
+
+    val adder = Module(new SubscalarAdder(width, numWays).suggestName(f"SubscalarAdder_${numWays}"))
+
+    adder.io.a := io.a
+    adder.io.b := io.b
+    adder.io.cin := io.cin
+
+    // io.cout := adder.io.cout
+    // io.sum := adder.io.sum
+
+    sums = sums.appended(adder.io.sum)
+    couts = couts.appended(adder.io.cout)
+
+  }
+
+  io.sum := sums.foldLeft(0.U) { (prev, cur) => prev | cur }
+  io.cout := couts.foldLeft(0.U) { (prev, cur) => prev | cur }
 
 }
